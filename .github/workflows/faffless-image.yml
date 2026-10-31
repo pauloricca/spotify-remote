@@ -1,0 +1,27 @@
+# Install as .github/workflows/faffless-image.yml in each Dockerfile app repo.
+# Set FAFFLESS_APP below to that app's apps.yaml key, and change the push branch
+# if apps.yaml specifies a branch other than main.
+name: Deploy through Faffless
+on:
+  push:
+    branches: ["main"]
+    paths-ignore: ['.github/workflows/faffless-image.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: faffless-notify-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    env:
+      FAFFLESS_APP: spotify
+      # Fine-grained PAT: Contents write on pauloricca/faffless only.
+      GH_TOKEN: ${{ secrets.FAFFLESS_DISPATCH_TOKEN }}
+    steps:
+      - name: Request a build of the configured source branch
+        run: |
+          jq -n --arg app "$FAFFLESS_APP" \
+            '{event_type: "app-pushed", client_payload: {app: $app}}' \
+            | gh api --method POST repos/pauloricca/faffless/dispatches --input -
