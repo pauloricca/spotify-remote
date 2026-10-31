@@ -24,6 +24,7 @@
             <%= content_tag :span, total_duration(@album), class: "total-duration" %>
           <% end %>
           <div class="reference-links">
+            <button class="icon-button save-button <%= if Map.get(@saved_items, @album.uri, false), do: "is-saved" %>" phx-click="toggle_saved" phx-value-uri="<%= @album.uri %>" aria-label="Save or remove album from your library" aria-pressed="<%= Map.get(@saved_items, @album.uri, false) %>"><%= render TuneWeb.HeaderView, "icon.html", name: :heart %></button>
             <button class="play-round" phx-click="play" phx-value-uri="<%= @album.uri %>" aria-label="Play <%= @album.name %>">
               <%= render TuneWeb.PlayerView, "icon_play.html", [] %>
             </button>

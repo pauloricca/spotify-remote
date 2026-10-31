@@ -1,0 +1,27 @@
+<div class="panel-backdrop" phx-click="close_panel" aria-hidden="true"></div>
+<aside class="drawer live-drawer" role="dialog" aria-modal="true" aria-labelledby="panel-heading" id="playback-panel" phx-hook="PlaybackPanel" phx-window-keydown="close_panel" phx-key="Escape" tabindex="-1">
+  <div class="drawer-heading"><h2 id="panel-heading"><%= if @panel == :queue, do: "Queue", else: "Play on" %></h2><button class="icon-button" phx-click="close_panel" aria-label="Close panel"><%= render HeaderView, "icon.html", name: :close %></button></div>
+  <%= if @panel == :queue do %>
+    <%= if @queue_error do %><p role="status" class="muted"><%= error_message(@queue_error) %></p><button class="outline-button" phx-click="open_queue">Try again</button><% else %>
+      <h3 class="panel-label">Now Playing</h3>
+      <% current = @queue.currently_playing || @player.item %>
+      <%= if current do %><%= render "song.html", item: current %><% else %><p class="muted">Nothing playing</p><% end %>
+      <h3 class="panel-label">Next in Queue</h3>
+      <%= if @queue.queue == [] do %><p class="muted">Your queue is empty. Play an album or playlist to keep the music going.</p><% else %>
+        <%= render_many @queue.queue, __MODULE__, "song.html", as: :item %>
+      <% end %>
+      <button class="outline-button" phx-click="open_queue">Refresh queue</button>
+    <% end %>
+  <% else %>
+    <%= if @devices == [] do %><div class="empty-state"><h3>No devices found</h3><p>Open Spotify on your Echo or another device, then refresh.</p></div><% end %>
+    <%= for device <- @devices do %>
+      <button class="device-row <%= if device.is_active, do: "active" %>" phx-click="transfer_playback" phx-value-device="<%= device.id %>" <%= if device.is_restricted || is_nil(device.id), do: "disabled" %> aria-pressed="<%= device.is_active %>">
+        <%= render HeaderView, "icon.html", name: (if device.type == "Computer", do: :device, else: :speaker) %><span><%= device.name %></span><%= if device.is_active do %><small>Active device ✓</small><% end %>
+      </button>
+    <% end %>
+    <%= if @player.device && is_number(@player.device.volume_percent) do %>
+      <form class="panel-volume" phx-change="set_volume"><%= render HeaderView, "icon.html", name: :volume %><label class="visually-hidden" for="panel-volume">Device volume</label><input id="panel-volume" type="range" name="volume" min="0" max="100" value="<%= @player.device.volume_percent %>" phx-debounce="150"><span><%= @player.device.volume_percent %>%</span></form>
+    <% end %>
+    <button class="outline-button" phx-click="refresh_devices">Refresh devices</button>
+  <% end %>
+</aside>

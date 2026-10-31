@@ -3,5 +3,5 @@
   <h1>Your music.<br>Your space.</h1>
   <p>A little closer to the music you love.<br>Connect Spotify to start listening.</p>
   <%= link gettext("Connect with Spotify"), to: Routes.auth_path(@conn, :request, :spotify), class: "button" %>
-  <a class="preview-link" href="/mockup.html">Explore the design preview →</a>
+  <p class="login-note">Listen on your Echo, speakers, or any Spotify device.</p>
 </main>

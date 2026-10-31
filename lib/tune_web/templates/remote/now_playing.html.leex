@@ -1,0 +1,28 @@
+<%= case @player do %>
+  <% %{item: nil} -> %>
+    <div class="empty-state"><h1>Nothing playing yet</h1><p>Choose something you love, then pick a device to listen on.</p><%= live_patch "Find music", to: Routes.explorer_path(@socket, :search), class: "button" %><button class="outline-button" phx-click="open_devices">Choose a device</button></div>
+  <% %{item: item, status: status} -> %>
+    <div class="now-playing-layout live-now-playing">
+      <%= img_tag artwork(item), alt: item.name, class: "now-cover" %>
+      <div class="now-details">
+        <p class="eyebrow"><%= if match?(%Track{}, item), do: "Playing from album", else: "Playing from podcast" %></p>
+        <%= if context(item) do %><%= live_patch context(item).name, to: SearchView.result_link(context(item), @socket) %><% end %>
+        <div class="now-title"><h1><%= item.name %></h1>
+          <button class="icon-button save-button <%= if saved?(@saved_items, item), do: "is-saved" %>" phx-click="toggle_saved" phx-value-uri="<%= item.uri %>" aria-label="Save or remove <%= item.name %> from your library" aria-pressed="<%= saved?(@saved_items, item) %>"><%= render HeaderView, "icon.html", name: :heart %></button>
+        </div>
+        <p class="muted"><%= byline(item) %></p>
+        <%= live_component ProgressBarComponent, id: :now_progress, premium?: @premium?, progress_ms: @player.progress_ms, total_duration_ms: item.duration_ms %>
+        <%= if @premium? do %>
+          <div class="big-player-controls">
+            <button class="icon-button <%= if @player.shuffle_state, do: "is-active" %>" phx-click="toggle_shuffle" aria-label="Shuffle" aria-pressed="<%= @player.shuffle_state %>"><%= render HeaderView, "icon.html", name: :shuffle %></button>
+            <button class="icon-button" phx-click="prev" aria-label="Previous track"><%= render PlayerView, "icon_prev.html", [] %></button>
+            <button class="icon-button big-play" phx-click="toggle_play_pause" aria-label="<%= if status == :playing, do: "Pause", else: "Play" %>"><%= render PlayerView, if(status == :playing, do: "icon_pause.html", else: "icon_play.html"), [] %></button>
+            <button class="icon-button" phx-click="next" aria-label="Next track"><%= render PlayerView, "icon_next.html", [] %></button>
+            <button class="icon-button <%= if @player.repeat_state != "off", do: "is-active" %>" phx-click="toggle_repeat" aria-label="Repeat: <%= @player.repeat_state %>" aria-pressed="<%= @player.repeat_state != "off" %>"><%= render HeaderView, "icon.html", name: :repeat %><%= if @player.repeat_state == "track", do: "1" %></button>
+          </div>
+        <% end %>
+        <div class="now-tools"><button class="icon-button" phx-click="open_devices" aria-label="Playback devices"><%= render HeaderView, "icon.html", name: :device %></button><button class="icon-button" phx-click="open_queue" aria-label="Open queue"><%= render HeaderView, "icon.html", name: :queue %></button></div>
+        <%= if @player.device do %><div class="device-status"><%= render HeaderView, "icon.html", name: :device %> Playing on <%= @player.device.name %></div><% end %>
+      </div>
+    </div>
+<% end %>

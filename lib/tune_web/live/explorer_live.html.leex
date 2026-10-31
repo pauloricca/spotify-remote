@@ -8,9 +8,12 @@
       <%= live_patch to: Routes.explorer_path(@socket, :search), class: "nav-item #{if @live_action == :search, do: "active"}" do %>
         <%= render TuneWeb.HeaderView, "icon.html", name: :search %><span>Search</span>
       <% end %>
-      <a class="nav-item" href="/#recently-played" title="Your recently played albums">
-        <%= render TuneWeb.HeaderView, "icon.html", name: :library %><span>Recently played</span>
-      </a>
+      <%= live_patch to: Routes.explorer_path(@socket, :library), class: "nav-item #{if @live_action == :library, do: "active"}" do %>
+        <%= render TuneWeb.HeaderView, "icon.html", name: :library %><span>Your Library</span>
+      <% end %>
+      <%= live_patch to: Routes.explorer_path(@socket, :now_playing), class: "nav-item now-nav #{if @live_action == :now_playing, do: "active"}" do %>
+        <%= render TuneWeb.HeaderView, "icon.html", name: :playing %><span>Now Playing</span>
+      <% end %>
       <div class="sidebar-caption">Your music. Your space.<span>Spotify connected</span></div>
     </aside>
     <header>
@@ -37,8 +40,14 @@
       </div>
     <% end %>
 
-    <div class="media">
+    <div class="media" id="music-content">
       <%= case @live_action do %>
+        <% :library -> %>
+          <%= render TuneWeb.RemoteView, "library.html", kind: @library_kind, page: @library_page, error: @library_error, socket: @socket %>
+        <% :now_playing -> %>
+          <%= render TuneWeb.RemoteView, "now_playing.html", player: @now_playing, premium?: @premium?, saved_items: @saved_items, socket: @socket %>
+        <% :playlist_details -> %>
+          <%= render TuneWeb.RemoteView, "playlist.html", playlist: @item, saved_items: @saved_items, socket: @socket %>
         <% :suggestions -> %>
           <%= render SuggestionsView, "index.html",
             suggestions_playlist: @suggestions_playlist,
@@ -56,12 +65,14 @@
             page: @page,
             per_page: @per_page,
             results: @results,
+            search_groups: @search_groups,
             socket: @socket %>
         <% :album_details -> %>
-          <%= render AlbumView, "show.html", album: @item, now_playing: @now_playing, socket: @socket %>
+          <%= render AlbumView, "show.html", album: @item, now_playing: @now_playing, saved_items: @saved_items, socket: @socket %>
         <% :artist_details -> %>
           <%= render ArtistView, "show.html",
                 artist: @item,
+                saved_items: @saved_items,
                 now_playing: @now_playing,
                 page: @page,
                 per_page: @per_page,
@@ -74,6 +85,9 @@
         <% end %>
     </div>
     <%= live_component MiniPlayerComponent, device_name: @device_name, premium?: @premium?, now_playing: @now_playing, devices: @devices, id: :mini_player %>
+    <%= if @panel do %>
+      <%= render TuneWeb.RemoteView, "panel.html", panel: @panel, queue: @queue, queue_error: @queue_error, devices: @devices, player: @now_playing %>
+    <% end %>
     <%= if @premium? do %>
       <script defer src="https://sdk.scdn.co/spotify-player.js"></script>
       <%= tag :div, id: "player", phx_hook: "AudioPlayer", data_token: @player_token, data_device_name: @device_name %>

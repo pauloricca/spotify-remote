@@ -4,6 +4,7 @@
   <details class="profile-menu">
     <summary aria-label="Account settings"><%= render "icon.html", name: :settings %></summary>
     <nav aria-label="Account">
+      <a href="/auth/spotify">Reconnect Spotify</a>
       <a href="#" id="open-button">Keyboard shortcuts</a>
       <%= link gettext("Logout"), to: Routes.auth_path(@socket, :delete), method: :post %>
       <%= link gettext("Credits"), to: "https://github.com/fully-forged/tune#credits", target: "_blank", rel: "noopener" %>

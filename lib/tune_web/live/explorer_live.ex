@@ -54,6 +54,14 @@ defmodule TuneWeb.ExplorerLive do
   @default_time_range "short_term"
 
   @initial_state [
+    panel: nil,
+    queue: %{currently_playing: nil, queue: []},
+    queue_error: nil,
+    library_kind: :playlists,
+    library_page: %{items: [], total: 0, next: nil},
+    library_error: nil,
+    saved_items: %{},
+    search_groups: %{},
     q: nil,
     type: :track,
     results: %{items: [], total: 0},
@@ -111,17 +119,90 @@ defmodule TuneWeb.ExplorerLive do
 
   @impl true
   def handle_params(params, url, socket) do
+    socket = assign(socket, :panel, nil)
+
     case socket.assigns.live_action do
-      :suggestions -> handle_suggestions(params, url, socket)
-      :search -> handle_search(params, url, socket)
-      :artist_details -> handle_artist_details(params, url, socket)
-      :album_details -> handle_album_details(params, url, socket)
-      :show_details -> handle_show_details(params, url, socket)
-      :episode_details -> handle_episode_details(params, url, socket)
+      :library ->
+        handle_library(params, socket)
+
+      :now_playing ->
+        {:noreply,
+         socket
+         |> assign(:page_title, "Now Playing")
+         |> load_saved(socket.assigns.now_playing.item)}
+
+      :playlist_details ->
+        handle_playlist(params, socket)
+
+      :suggestions ->
+        handle_suggestions(params, url, socket)
+
+      :search ->
+        handle_search(params, url, socket)
+
+      :artist_details ->
+        handle_artist_details(params, url, socket)
+
+      :album_details ->
+        handle_album_details(params, url, socket)
+
+      :show_details ->
+        handle_show_details(params, url, socket)
+
+      :episode_details ->
+        handle_episode_details(params, url, socket)
     end
   end
 
   @impl true
+  def handle_event("open_devices", _params, socket) do
+    spotify_session().refresh_devices(socket.assigns.session_id)
+    {:noreply, assign(socket, :panel, :devices)}
+  end
+
+  def handle_event("open_queue", _params, socket),
+    do: {:noreply, socket |> assign(:panel, :queue) |> load_queue()}
+
+  def handle_event("close_panel", _params, socket), do: {:noreply, assign(socket, :panel, nil)}
+
+  def handle_event("toggle_shuffle", _params, socket) do
+    spotify_session().set_shuffle(
+      socket.assigns.session_id,
+      !socket.assigns.now_playing.shuffle_state
+    )
+    |> handle_spotify_session_result(socket)
+  end
+
+  def handle_event("toggle_repeat", _params, socket) do
+    mode =
+      case socket.assigns.now_playing.repeat_state do
+        "off" -> "context"
+        "context" -> "track"
+        _ -> "off"
+      end
+
+    spotify_session().set_repeat(socket.assigns.session_id, mode)
+    |> handle_spotify_session_result(socket)
+  end
+
+  def handle_event("toggle_saved", %{"uri" => uri}, socket) do
+    # Read before toggling so this also works when arriving from an old session.
+    with true <- valid_library_uri?(uri),
+         {:ok, [saved]} <- spotify_session().saved_items(socket.assigns.session_id, [uri]),
+         :ok <- spotify_session().set_saved(socket.assigns.session_id, uri, !saved) do
+      {:noreply,
+       socket
+       |> assign(:saved_items, Map.put(socket.assigns.saved_items, uri, !saved))
+       |> put_flash(
+         :info,
+         if(saved, do: "Removed from your library", else: "Saved to your library")
+       )}
+    else
+      false -> {:noreply, socket}
+      error -> handle_spotify_session_result(error, socket)
+    end
+  end
+
   def handle_event("toggle_play_pause", %{"key" => " "}, socket) do
     spotify_session().toggle_play(socket.assigns.session_id)
 
@@ -219,7 +300,7 @@ defmodule TuneWeb.ExplorerLive do
         {:noreply, socket}
 
       device ->
-        volume_percent = min(device.volume_percent + 10, 100)
+        volume_percent = min((device.volume_percent || 0) + 10, 100)
         set_volume(volume_percent, socket)
     end
   end
@@ -230,18 +311,21 @@ defmodule TuneWeb.ExplorerLive do
         {:noreply, socket}
 
       device ->
-        volume_percent = max(device.volume_percent - 10, 0)
+        volume_percent = max((device.volume_percent || 0) - 10, 0)
         set_volume(volume_percent, socket)
     end
   end
+
+  def handle_event("set_volume", %{"volume" => volume_percent}, socket),
+    do: set_volume(volume_percent, socket)
 
   def handle_event("set_volume", %{"volume_percent" => volume_percent}, socket) do
     set_volume(volume_percent, socket)
   end
 
   def handle_event("refresh_devices", _params, socket) do
-    :ok = spotify_session().refresh_devices(socket.assigns.session_id)
-    {:noreply, socket}
+    spotify_session().refresh_devices(socket.assigns.session_id)
+    |> handle_spotify_session_result(socket)
   end
 
   @impl true
@@ -254,19 +338,30 @@ defmodule TuneWeb.ExplorerLive do
 
       [:progress_ms] == changes ->
         send_update(ProgressBarComponent, id: :progress_bar, progress_ms: player.progress_ms)
-        {:noreply, socket}
+
+        if socket.assigns.live_action == :now_playing do
+          send_update(ProgressBarComponent, id: :now_progress, progress_ms: player.progress_ms)
+        end
+
+        {:noreply, assign(socket, :now_playing, player)}
 
       :item in changes ->
-        case spotify_session().recently_played_tracks(socket.assigns.session_id, limit: 50) do
-          {:ok, recently_played_tracks} ->
-            {:noreply,
-             assign(socket,
-               suggestions_recently_played_albums: Album.from_tracks(recently_played_tracks),
-               now_playing: player
-             )}
+        socket = assign(socket, :now_playing, player)
 
-          error ->
-            handle_spotify_session_result(error, socket)
+        socket =
+          if socket.assigns.live_action == :now_playing,
+            do: load_saved(socket, player.item),
+            else: socket
+
+        socket = if socket.assigns.panel == :queue, do: load_queue(socket), else: socket
+
+        case spotify_session().recently_played_tracks(socket.assigns.session_id, limit: 50) do
+          {:ok, tracks} ->
+            {:noreply,
+             assign(socket, :suggestions_recently_played_albums, Album.from_tracks(tracks))}
+
+          _ ->
+            {:noreply, socket}
         end
 
       true ->
@@ -285,31 +380,122 @@ defmodule TuneWeb.ExplorerLive do
   defp spotify_session, do: Application.get_env(:tune, :spotify_session)
 
   defp handle_suggestions(_params, _url, socket) do
-    socket = assign(socket, :page_title, gettext("Suggestions"))
+    session = socket.assigns.session_id
 
-    with {:ok, playlist} <- get_suggestions_playlist(socket.assigns.session_id),
-         {:ok, top_tracks} <-
-           get_top_tracks(
-             socket.assigns.session_id,
-             socket.assigns.suggestions_top_albums_time_range
-           ),
-         {:ok, recently_played_tracks} <-
-           spotify_session().recently_played_tracks(socket.assigns.session_id, limit: 50),
-         {:ok, recommended_tracks} <-
-           get_recommendations(socket.assigns.session_id, top_tracks) do
-      {:noreply,
-       assign(socket,
-         suggestions_playlist: playlist,
-         suggestions_top_albums: Album.from_tracks(top_tracks),
-         suggestions_recently_played_albums: Album.from_tracks(recently_played_tracks),
-         suggestions_recommended_tracks: recommended_tracks
-       )}
-    else
-      {:error, :not_present} ->
-        {:noreply, assign(socket, :suggestions_playlist, :not_present)}
+    playlist =
+      case get_suggestions_playlist(session) do
+        {:ok, playlist} -> playlist
+        {:error, :not_present} -> :not_present
+        _ -> :not_fetched
+      end
+
+    recent =
+      case spotify_session().recently_played_tracks(session, limit: 50) do
+        {:ok, tracks} -> Album.from_tracks(tracks)
+        _ -> :not_fetched
+      end
+
+    top = get_top_tracks(session, socket.assigns.suggestions_top_albums_time_range)
+
+    albums =
+      case top do
+        {:ok, tracks} -> Album.from_tracks(tracks)
+        _ -> :not_fetched
+      end
+
+    recommendations =
+      case top do
+        {:ok, tracks} ->
+          case get_recommendations(session, tracks) do
+            {:ok, recommended} -> recommended
+            _ -> :not_fetched
+          end
+
+        _ ->
+          :not_fetched
+      end
+
+    {:noreply,
+     assign(socket,
+       page_title: "Home",
+       suggestions_playlist: playlist,
+       suggestions_recently_played_albums: recent,
+       suggestions_top_albums: albums,
+       suggestions_recommended_tracks: recommendations
+     )}
+  end
+
+  defp handle_library(params, socket) do
+    kind =
+      case Map.get(params, "type") do
+        "albums" -> :albums
+        "artists" -> :artists
+        "shows" -> :shows
+        "tracks" -> :tracks
+        _ -> :playlists
+      end
+
+    opts = [
+      offset: positive_integer(Map.get(params, "offset"), 0),
+      after: Map.get(params, "after")
+    ]
+
+    socket =
+      assign(socket,
+        page_title: "Your Library",
+        library_kind: kind,
+        library_error: nil,
+        library_page: %{items: [], total: 0, next: nil}
+      )
+
+    case spotify_session().library(socket.assigns.session_id, kind, opts) do
+      {:ok, page} -> {:noreply, assign(socket, :library_page, page)}
+      {:error, reason} -> {:noreply, assign(socket, :library_error, reason)}
+    end
+  end
+
+  defp handle_playlist(%{"playlist_id" => id}, socket) do
+    case spotify_session().get_playlist(socket.assigns.session_id, id) do
+      {:ok, playlist} ->
+        {:noreply,
+         socket |> assign(item: playlist, page_title: playlist.name) |> load_saved(playlist)}
 
       error ->
-        handle_spotify_session_result(error, socket)
+        handle_spotify_session_result(error, assign(socket, :item, :not_fetched))
+    end
+  end
+
+  defp load_queue(socket) do
+    case spotify_session().queue(socket.assigns.session_id) do
+      {:ok, queue} ->
+        assign(socket, queue: queue, queue_error: nil)
+
+      {:error, reason} ->
+        assign(socket, queue: %{currently_playing: nil, queue: []}, queue_error: reason)
+    end
+  end
+
+  defp load_saved(socket, %{uri: uri}) when is_binary(uri) do
+    case spotify_session().saved_items(socket.assigns.session_id, [uri]) do
+      {:ok, [saved]} ->
+        assign(socket, :saved_items, Map.put(socket.assigns.saved_items, uri, saved))
+
+      _ ->
+        socket
+    end
+  end
+
+  defp load_saved(socket, _), do: socket
+
+  defp valid_library_uri?(uri),
+    do:
+      is_binary(uri) &&
+        Regex.match?(~r/^spotify:(track|album|artist|show|episode):[a-zA-Z0-9]+$/, uri)
+
+  defp positive_integer(value, default) do
+    case Integer.parse(to_string(value)) do
+      {number, ""} when number >= 0 -> number
+      _ -> default
     end
   end
 
@@ -322,23 +508,38 @@ defmodule TuneWeb.ExplorerLive do
 
     if String.length(q) >= 1 do
       type = parse_type(type)
-      page = String.to_integer(page)
-      limit = per_page |> String.to_integer() |> max(1) |> min(10)
+      page = max(positive_integer(page, 1), 1)
+      limit = per_page |> positive_integer(10) |> max(1) |> min(10)
       offset = max(page - 1, 0) * limit
 
       socket =
         socket
+        |> assign(results: %{items: [], total: 0}, search_groups: %{})
         |> assign(:q, q)
         |> assign(:type, type)
         |> assign(:page, page)
         |> assign(:per_page, limit)
         |> assign(:page_title, gettext("Search results for %{q}", %{q: q}))
 
-      search_opts = [types: [type], limit: limit, offset: offset]
+      types = if type == :all, do: [:artist, :track, :album, :playlist], else: [type]
+      search_opts = [types: types, limit: limit, offset: offset]
 
       case spotify_session().search(socket.assigns.session_id, q, search_opts) do
         {:ok, results} ->
-          {:noreply, assign(socket, :results, Map.get(results, type))}
+          page_results =
+            if type == :all do
+              %{
+                items: Enum.flat_map(types, &(get_in(results, [&1, :items]) || [])),
+                total:
+                  Enum.reduce(types, 0, fn kind, total ->
+                    max(total, get_in(results, [kind, :total]) || 0)
+                  end)
+              }
+            else
+              Map.get(results, type, %{items: [], total: 0})
+            end
+
+          {:noreply, assign(socket, results: page_results, search_groups: results)}
 
         error ->
           handle_spotify_session_result(error, socket)
@@ -390,7 +591,8 @@ defmodule TuneWeb.ExplorerLive do
          page: page,
          per_page: limit,
          page_title: gettext("Artist details for %{name}", %{name: artist.name})
-       })}
+       })
+       |> load_saved(artist)}
     else
       error ->
         handle_spotify_session_result(error, socket)
@@ -406,7 +608,8 @@ defmodule TuneWeb.ExplorerLive do
          assign(socket,
            item: album,
            page_title: gettext("Album details for %{name}", %{name: album.name})
-         )}
+         )
+         |> load_saved(album)}
 
       error ->
         handle_spotify_session_result(error, socket)
@@ -450,11 +653,14 @@ defmodule TuneWeb.ExplorerLive do
     end
   end
 
+  defp parse_type("all"), do: :all
+  defp parse_type("playlist"), do: :playlist
   defp parse_type("track"), do: :track
   defp parse_type("album"), do: :album
   defp parse_type("artist"), do: :artist
   defp parse_type("episode"), do: :episode
   defp parse_type("show"), do: :show
+  defp parse_type(_), do: :track
 
   defp parse_album_group("all"), do: :all
   defp parse_album_group("album"), do: :album
@@ -466,6 +672,15 @@ defmodule TuneWeb.ExplorerLive do
 
   defp handle_spotify_session_result({:error, 404}, socket) do
     {:noreply, put_flash(socket, :error, gettext("No available devices"))}
+  end
+
+  defp handle_spotify_session_result({:error, 403}, socket) do
+    {:noreply,
+     put_flash(
+       socket,
+       :error,
+       "Spotify could not allow this action. Reconnect Spotify to grant library access, or check playback is available on your device."
+     )}
   end
 
   defp handle_spotify_session_result({:error, reason}, socket) do
@@ -481,7 +696,10 @@ defmodule TuneWeb.ExplorerLive do
              limit: 1
            ),
          simplified_playlist when is_struct(simplified_playlist) <-
-           get_in(results, [:playlists, :items, Access.at(0)]) do
+           Enum.at(
+             get_in(results, [:playlist, :items]) || get_in(results, [:playlists, :items]) || [],
+             0
+           ) do
       spotify_session().get_playlist(session_id, simplified_playlist.id)
     else
       nil -> {:error, :not_present}
@@ -507,6 +725,8 @@ defmodule TuneWeb.ExplorerLive do
   end
 
   defp set_volume(volume_percent, socket) do
+    volume_percent = volume_percent |> positive_integer(0) |> min(100)
+
     case spotify_session().set_volume(socket.assigns.session_id, volume_percent) do
       :ok ->
         {:noreply, socket}

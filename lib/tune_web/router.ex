@@ -41,6 +41,9 @@ defmodule TuneWeb.Router do
 
     live "/", ExplorerLive, :suggestions
     live "/search", ExplorerLive, :search
+    live "/library", ExplorerLive, :library
+    live "/now-playing", ExplorerLive, :now_playing
+    live "/playlists/:playlist_id", ExplorerLive, :playlist_details
     live "/artists/:artist_id", ExplorerLive, :artist_details
     live "/albums/:album_id", ExplorerLive, :album_details
     live "/shows/:show_id", ExplorerLive, :show_details

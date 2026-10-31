@@ -1,0 +1,14 @@
+<div class="search-columns">
+  <div>
+    <h3>Top result</h3>
+    <%= case get_in(@groups, [:artist, :items]) || [] do %>
+      <% [artist | _] -> %><%= live_patch to: SearchView.result_link(artist, @socket), class: "top-result" do %><%= img_tag artwork(artist), alt: artist.name, class: "artist-cover" %><h2><%= artist.name %></h2><span class="muted">Artist</span><% end %>
+      <% [] -> %><p class="muted">No artists found</p>
+    <% end %>
+  </div>
+  <div><h3>Songs</h3><%= for item <- Enum.take(get_in(@groups, [:track, :items]) || [], 4) do %><%= render "song.html", item: item %><% end %></div>
+</div>
+<%= for {kind, title} <- [{:album, "Albums"}, {:playlist, "Playlists"}] do %>
+  <% items = get_in(@groups, [kind, :items]) || [] %>
+  <%= if items != [] do %><div class="section-heading"><h2><%= title %></h2><%= live_patch "See all", to: Routes.explorer_path(@socket, :search, q: @q, type: kind) %></div><div class="results"><%= render_many items, __MODULE__, "card.html", as: :item, socket: @socket %></div><% end %>
+<% end %>

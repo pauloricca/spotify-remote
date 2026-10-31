@@ -9,7 +9,5 @@ defmodule TuneWeb.HeaderView do
     end
   end
 
-  defp fallback_avatar(name) do
-    "https://via.placeholder.com/45?text=" <> String.first(name)
-  end
+  defp fallback_avatar(_name), do: "/images/music-placeholder.svg"
 end

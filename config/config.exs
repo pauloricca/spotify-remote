@@ -37,6 +37,12 @@ spotify_scope =
     user-read-private
     user-read-recently-played
     user-top-read
+    user-library-read
+    user-library-modify
+    user-follow-read
+    user-follow-modify
+    playlist-read-private
+    playlist-read-collaborative
   )
   |> Enum.join(" ")
 

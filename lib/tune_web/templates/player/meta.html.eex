@@ -1,5 +1,5 @@
 <div class="meta">
-  <%= live_patch name(@item), to: TuneWeb.SearchView.result_link(@item, @socket), class: "name reversed" %>
+  <%= live_patch name(@item), to: Routes.explorer_path(@socket, :now_playing), class: "name reversed" %>
   <p class="authors">
     <%= authors(@item, @socket) %>
   </p>

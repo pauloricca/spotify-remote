@@ -1,3 +1,10 @@
+<%= if @q do %>
+<nav class="chips search-type-chips" aria-label="Search filters">
+  <%= for {type, label} <- [{:all, "All"}, {:artist, "Artists"}, {:album, "Albums"}, {:track, "Songs"}, {:playlist, "Playlists"}, {:show, "Podcasts"}] do %>
+    <%= live_patch label, to: Routes.explorer_path(@socket, :search, q: @q, type: type), class: "chip #{if to_string(@type) == to_string(type), do: "active"}" %>
+  <% end %>
+</nav>
+<% end %>
 <%= case {@q, @results} do %>
   <% {nil, _results} -> %>
     <div class="section-heading"><h2>Browse all</h2></div>
@@ -16,7 +23,9 @@
         url_fn: fn(current_page, per_page) ->
           Routes.explorer_path(@socket, :search, q: @q, type: @type, page: current_page, per_page: per_page)
         end %>
-    <div class="results">
-      <%= render_many results.items, TuneWeb.SearchView, "result.html", as: :item, socket: @socket %>
-    </div>
+    <%= if @type == :all do %>
+      <%= render TuneWeb.RemoteView, "search_all.html", groups: @search_groups, q: @q, socket: @socket %>
+    <% else %>
+      <div class="results"><%= render_many results.items, TuneWeb.SearchView, "result.html", as: :item, socket: @socket %></div>
+    <% end %>
 <% end %>

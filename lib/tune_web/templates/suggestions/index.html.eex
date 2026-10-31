@@ -1,7 +1,10 @@
 <div class="page-heading"><h1>Good morning</h1></div>
 <div class="mix-grid" aria-label="Find your next listen">
   <%= for {title, query, color} <- [{"Discover Weekly", "discover weekly", "discover"}, {"Daily Mix 1", "daily mix", "daily"}, {"Chilled Vibes", "chill", "chill"}, {"Indie Favourites", "indie", "indie"}] do %>
-    <%= live_patch to: Routes.explorer_path(@socket, :search, q: query, type: "album"), class: "mix-card mix-#{color}" do %>
+    <%= live_patch to: Routes.explorer_path(@socket, :search, q: query, type: "playlist"), class: "mix-card mix-#{color}" do %>
+      <% albums = if is_list(@suggestions_recently_played_albums), do: @suggestions_recently_played_albums, else: [] %>
+      <% index = Enum.find_index(["discover", "daily", "chill", "indie"], &(&1 == color)) %>
+      <%= if album = Enum.at(albums, index) do %><%= img_tag TuneWeb.RemoteView.artwork(album), alt: "", class: "mix-art" %><% end %>
       <span><%= title %></span>
     <% end %>
   <% end %>
@@ -18,7 +21,7 @@
 
 <%= case @suggestions_top_albums do %>
   <% :not_fetched -> %>
-    <%= content_tag :p, gettext("Cannot display top albums.") %>
+    <p class="muted availability-note">Cannot display top albums.</p>
   <% albums -> %>
     <%= render "top_albums.html",
       albums: albums,
@@ -29,7 +32,7 @@
 
 <%= case @suggestions_recommended_tracks do %>
   <% :not_fetched -> %>
-    <%= content_tag :p, gettext("Cannot display top albums.") %>
+
   <% tracks -> %>
     <%= render "recommended_tracks.html",
       tracks: tracks,
@@ -40,9 +43,11 @@
 
 <%= case @suggestions_playlist do %>
   <% :not_fetched -> %>
-    <%= content_tag :p, gettext("Cannot display Release Radar.") %>
+
   <% :not_present -> %>
-    <%= content_tag :p, gettext("Cannot display Release Radar - Make sure you have access to the playlist.") %>
+
   <% playlist -> %>
-    <%= render PlaylistView, "show.html", playlist: playlist, now_playing: @now_playing, socket: @socket %>
+    <%= if is_list(playlist.tracks) do %><%= render PlaylistView, "show.html", playlist: playlist, now_playing: @now_playing, socket: @socket %><% else %>
+      <div class="section-heading"><h2>Made for you</h2></div><div class="results"><%= render TuneWeb.RemoteView, "card.html", item: playlist, socket: @socket %></div>
+    <% end %>
   <% end %>

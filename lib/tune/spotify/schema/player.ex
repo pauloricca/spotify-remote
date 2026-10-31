@@ -8,24 +8,32 @@ defmodule Tune.Spotify.Schema.Player do
   defstruct status: :not_playing,
             item: nil,
             progress_ms: 0,
-            device: nil
+            device: nil,
+            shuffle_state: false,
+            repeat_state: "off"
 
   @type t :: %__MODULE__{
           status: :not_playing | :paused | :playing,
           item: Schema.Track.t() | Schema.Episode.t(),
           progress_ms: Duration.milliseconds(),
-          device: Schema.Device.t()
+          device: Schema.Device.t(),
+          shuffle_state: boolean(),
+          repeat_state: String.t()
         }
-  @type prop :: :status | :item | :progress_ms | :device
+  @type prop :: :status | :item | :progress_ms | :device | :shuffle_state | :repeat_state
 
   @spec changes(t(), t()) :: [prop()]
   def changes(p1, p2) do
-    Enum.reduce([:status, :item, :progress_ms, :device], [], fn prop, acc ->
-      if Map.get(p1, prop) !== Map.get(p2, prop) do
-        [prop | acc]
-      else
-        acc
+    Enum.reduce(
+      [:status, :item, :progress_ms, :device, :shuffle_state, :repeat_state],
+      [],
+      fn prop, acc ->
+        if Map.get(p1, prop) !== Map.get(p2, prop) do
+          [prop | acc]
+        else
+          acc
+        end
       end
-    end)
+    )
   end
 end

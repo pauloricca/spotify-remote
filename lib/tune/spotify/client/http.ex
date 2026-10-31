@@ -45,7 +45,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   @impl true
   def get_profile(token) do
-    case json_get(@base_url <> "/me", auth_headers(token)) do
+    case json_get(base_url() <> "/me", auth_headers(token)) do
       {:ok, %{status: 200} = response} ->
         user =
           response.body
@@ -89,7 +89,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   @impl true
   def get_devices(token) do
-    case json_get(@base_url <> "/me/player/devices", auth_headers(token)) do
+    case json_get(base_url() <> "/me/player/devices", auth_headers(token)) do
       {:ok, %{status: 200} = response} ->
         devices =
           response.body
@@ -106,7 +106,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   @impl true
   def next(token) do
-    case post(@base_url <> "/me/player/next", <<>>, auth_headers(token)) do
+    case post(base_url() <> "/me/player/next", <<>>, auth_headers(token)) do
       {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
@@ -117,7 +117,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   @impl true
   def now_playing(token) do
-    case json_get(@base_url <> "/me/player?additional_types=episode", auth_headers(token)) do
+    case json_get(base_url() <> "/me/player?additional_types=episode", auth_headers(token)) do
       {:ok, %{status: 204}} ->
         {:ok, %Player{}}
 
@@ -134,7 +134,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   @impl true
   def pause(token) do
-    case json_put(@base_url <> "/me/player/pause", %{}, auth_headers(token)) do
+    case json_put(base_url() <> "/me/player/pause", %{}, auth_headers(token)) do
       {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
@@ -145,7 +145,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   @impl true
   def play(token) do
-    case json_put(@base_url <> "/me/player/play", %{}, auth_headers(token)) do
+    case json_put(base_url() <> "/me/player/play", %{}, auth_headers(token)) do
       {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
@@ -163,7 +163,7 @@ defmodule Tune.Spotify.Client.HTTP do
         %{context_uri: uri}
       end
 
-    case json_put(@base_url <> "/me/player/play", payload, auth_headers(token)) do
+    case json_put(base_url() <> "/me/player/play", payload, auth_headers(token)) do
       {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
@@ -181,7 +181,7 @@ defmodule Tune.Spotify.Client.HTTP do
       }
     }
 
-    case json_put(@base_url <> "/me/player/play", payload, auth_headers(token)) do
+    case json_put(base_url() <> "/me/player/play", payload, auth_headers(token)) do
       {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
@@ -192,7 +192,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   @impl true
   def prev(token) do
-    case post(@base_url <> "/me/player/previous", <<>>, auth_headers(token)) do
+    case post(base_url() <> "/me/player/previous", <<>>, auth_headers(token)) do
       {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
@@ -208,7 +208,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case put(
-           @base_url <> "/me/player/seek?" <> URI.encode_query(params),
+           base_url() <> "/me/player/seek?" <> URI.encode_query(params),
            <<>>,
            auth_headers(token)
          ) do
@@ -227,7 +227,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case put(
-           @base_url <> "/me/player/volume?" <> URI.encode_query(params),
+           base_url() <> "/me/player/volume?" <> URI.encode_query(params),
            <<>>,
            auth_headers(token)
          ) do
@@ -245,7 +245,7 @@ defmodule Tune.Spotify.Client.HTTP do
       device_ids: [device_id]
     }
 
-    case json_put(@base_url <> "/me/player", params, auth_headers(token)) do
+    case json_put(base_url() <> "/me/player", params, auth_headers(token)) do
       {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
@@ -265,7 +265,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case json_get(
-           @base_url <> "/albums/" <> album_id <> "?" <> URI.encode_query(params),
+           base_url() <> "/albums/" <> album_id <> "?" <> URI.encode_query(params),
            auth_headers(token)
          ) do
       {:ok, %{status: 200} = response} ->
@@ -284,7 +284,7 @@ defmodule Tune.Spotify.Client.HTTP do
   @impl true
   def get_artist(token, artist_id) do
     case json_get(
-           @base_url <> "/artists/" <> artist_id,
+           base_url() <> "/artists/" <> artist_id,
            auth_headers(token)
          ) do
       {:ok, %{status: 200} = response} ->
@@ -319,7 +319,7 @@ defmodule Tune.Spotify.Client.HTTP do
       end
 
     case json_get(
-           @base_url <> "/artists/" <> artist_id <> "/albums" <> "?" <> URI.encode_query(params),
+           base_url() <> "/artists/" <> artist_id <> "/albums" <> "?" <> URI.encode_query(params),
            auth_headers(token)
          ) do
       {:ok, %{status: 200} = response} ->
@@ -342,7 +342,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case json_get(
-           @base_url <> "/shows/" <> show_id <> "/episodes" <> "?" <> URI.encode_query(params),
+           base_url() <> "/shows/" <> show_id <> "/episodes" <> "?" <> URI.encode_query(params),
            auth_headers(token)
          ) do
       {:ok, %{status: 200} = response} ->
@@ -366,7 +366,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case json_get(
-           @base_url <> "/playlists/" <> playlist_id <> "?" <> URI.encode_query(params),
+           base_url() <> "/playlists/" <> playlist_id <> "?" <> URI.encode_query(params),
            auth_headers(token)
          ) do
       {:ok, %{status: 200} = response} ->
@@ -390,7 +390,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case json_get(
-           @base_url <> "/recommendations" <> "?" <> URI.encode_query(params),
+           base_url() <> "/recommendations" <> "?" <> URI.encode_query(params),
            auth_headers(token)
          ) do
       {:ok, %{status: 200} = response} ->
@@ -414,7 +414,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case json_get(
-           @base_url <> "/shows/" <> show_id <> "?" <> URI.encode_query(params),
+           base_url() <> "/shows/" <> show_id <> "?" <> URI.encode_query(params),
            auth_headers(token)
          ) do
       {:ok, %{status: 200} = response} ->
@@ -437,7 +437,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case json_get(
-           @base_url <> "/episodes/" <> episode_id <> "?" <> URI.encode_query(params),
+           base_url() <> "/episodes/" <> episode_id <> "?" <> URI.encode_query(params),
            auth_headers(token)
          ) do
       {:ok, %{status: 200} = response} ->
@@ -473,7 +473,7 @@ defmodule Tune.Spotify.Client.HTTP do
       end
 
     case json_get(
-           @base_url <> "/me/player/recently-played?" <> URI.encode_query(params),
+           base_url() <> "/me/player/recently-played?" <> URI.encode_query(params),
            auth_headers(token)
          ) do
       {:ok, %{status: 200} = response} ->
@@ -494,7 +494,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   @impl true
   def search(token, q, opts) do
-    limit = Keyword.get(opts, :limit, @default_limit)
+    limit = opts |> Keyword.get(:limit, 10) |> max(1) |> min(10)
     offset = Keyword.get(opts, :offset, @default_offset)
     types = Keyword.get(opts, :types, @default_types)
 
@@ -506,7 +506,7 @@ defmodule Tune.Spotify.Client.HTTP do
       offset: offset
     }
 
-    case json_get(@base_url <> "/search?" <> URI.encode_query(params), auth_headers(token)) do
+    case json_get(base_url() <> "/search?" <> URI.encode_query(params), auth_headers(token)) do
       {:ok, %{status: 200} = response} ->
         results =
           response.body
@@ -533,7 +533,10 @@ defmodule Tune.Spotify.Client.HTTP do
       time_range: time_range
     }
 
-    case json_get(@base_url <> "/me/top/tracks?" <> URI.encode_query(params), auth_headers(token)) do
+    case json_get(
+           base_url() <> "/me/top/tracks?" <> URI.encode_query(params),
+           auth_headers(token)
+         ) do
       {:ok, %{status: 200} = response} ->
         results =
           response.body
@@ -547,6 +550,103 @@ defmodule Tune.Spotify.Client.HTTP do
         handle_errors(other_response)
     end
   end
+
+  @impl true
+  def library(token, kind, opts) do
+    {path, wrapper, parser} =
+      case kind do
+        :playlists -> {"/me/playlists", nil, &parse_playlist/1}
+        :albums -> {"/me/albums", "album", &parse_album/1}
+        :tracks -> {"/me/tracks", "track", &parse_track/1}
+        :shows -> {"/me/shows", "show", &parse_show/1}
+        :artists -> {"/me/following", nil, &parse_artist/1}
+      end
+
+    params = %{limit: 24}
+
+    params =
+      if kind == :artists,
+        do: Map.merge(params, %{type: "artist", after: Keyword.get(opts, :after)}),
+        else: Map.put(params, :offset, Keyword.get(opts, :offset, 0))
+
+    params = params |> Enum.reject(fn {_key, value} -> is_nil(value) end) |> Map.new()
+
+    with {:ok, body} <- get_json(token, path, params) do
+      page = if kind == :artists, do: Map.get(body, "artists", %{}), else: body
+      items = page |> Map.get("items", []) |> Enum.reject(&is_nil/1)
+      items = if wrapper, do: Enum.map(items, &Map.get(&1, wrapper)), else: items
+
+      {:ok,
+       %{
+         items: items |> Enum.reject(&is_nil/1) |> Enum.map(parser),
+         total: Map.get(page, "total", 0),
+         next: Map.get(page, "next")
+       }}
+    end
+  end
+
+  @impl true
+  def queue(token) do
+    with {:ok, body} <- get_json(token, "/me/player/queue", %{}) do
+      {:ok,
+       %{
+         currently_playing: parse_playable(Map.get(body, "currently_playing")),
+         queue:
+           body |> Map.get("queue", []) |> Enum.map(&parse_playable/1) |> Enum.reject(&is_nil/1)
+       }}
+    end
+  end
+
+  @impl true
+  def saved_items(token, uris),
+    do: get_json(token, "/me/library/contains", %{uris: Enum.join(uris, ",")})
+
+  @impl true
+  def set_saved(token, uri, saved) when is_boolean(saved) do
+    method = if saved, do: :put, else: :delete
+
+    Finch.build(
+      method,
+      base_url() <> "/me/library?" <> URI.encode_query(%{uris: uri}),
+      auth_headers(token)
+    )
+    |> Finch.request(Tune.Finch)
+    |> mutation_result()
+  end
+
+  @impl true
+  def set_shuffle(token, enabled) when is_boolean(enabled),
+    do: playback_setting(token, "shuffle", %{state: enabled})
+
+  @impl true
+  def set_repeat(token, mode) when mode in ["off", "context", "track"],
+    do: playback_setting(token, "repeat", %{state: mode})
+
+  defp playback_setting(token, setting, params) do
+    put(
+      base_url() <> "/me/player/" <> setting <> "?" <> URI.encode_query(params),
+      <<>>,
+      auth_headers(token)
+    )
+    |> mutation_result()
+  end
+
+  defp mutation_result({:ok, %{status: status}}) when status in 200..299, do: :ok
+  defp mutation_result(error), do: handle_errors(error)
+
+  defp get_json(token, path, params) do
+    case json_get(base_url() <> path <> "?" <> URI.encode_query(params), auth_headers(token)) do
+      {:ok, %{status: 200, body: body}} -> Jason.decode(body)
+      {:ok, %{status: 204}} -> {:ok, %{}}
+      error -> handle_errors(error)
+    end
+  end
+
+  defp parse_playable(%{"type" => "episode"} = item), do: parse_episode_with_metadata(item)
+  defp parse_playable(%{"type" => "track"} = item), do: parse_track(item)
+  defp parse_playable(_), do: nil
+
+  defp base_url, do: Application.get_env(:tune, :spotify_api_base_url, @base_url)
 
   defp auth_headers(token) do
     [{"Authorization", "Bearer #{token}"}]
@@ -674,7 +774,14 @@ defmodule Tune.Spotify.Client.HTTP do
           |> Map.get("device")
           |> parse_device()
 
-        %Player{status: status, item: item, progress_ms: progress_ms, device: device}
+        %Player{
+          status: status,
+          item: item,
+          progress_ms: progress_ms || 0,
+          device: device,
+          shuffle_state: Map.get(data, "shuffle_state", false),
+          repeat_state: Map.get(data, "repeat_state", "off")
+        }
 
       "episode" ->
         item =
@@ -690,7 +797,14 @@ defmodule Tune.Spotify.Client.HTTP do
           |> Map.get("device")
           |> parse_device()
 
-        %Player{status: status, item: item, progress_ms: progress_ms, device: device}
+        %Player{
+          status: status,
+          item: item,
+          progress_ms: progress_ms || 0,
+          device: device,
+          shuffle_state: Map.get(data, "shuffle_state", false),
+          repeat_state: Map.get(data, "repeat_state", "off")
+        }
     end
   end
 
@@ -705,7 +819,7 @@ defmodule Tune.Spotify.Client.HTTP do
       disc_number: Map.get(item, "disc_number"),
       artists:
         item
-        |> Map.get("artists")
+        |> Map.get("artists", [])
         |> Enum.map(&parse_artist/1),
       album:
         item
@@ -748,6 +862,8 @@ defmodule Tune.Spotify.Client.HTTP do
     }
   end
 
+  defp parse_album(nil), do: :not_fetched
+
   defp parse_album(item) do
     %Album{
       id: Map.get(item, "id"),
@@ -760,7 +876,7 @@ defmodule Tune.Spotify.Client.HTTP do
       release_date_precision: Map.get(item, "release_date_precision"),
       artists:
         item
-        |> Map.get("artists")
+        |> Map.get("artists", [])
         |> Enum.map(&parse_artist/1),
       thumbnails:
         item
@@ -855,13 +971,19 @@ defmodule Tune.Spotify.Client.HTTP do
     }
   end
 
+  defp parse_thumbnails(nil), do: %{}
+
   defp parse_thumbnails(images) do
     Enum.into(images, %{}, fn
       %{"height" => height, "url" => url} when height in 0..199 -> {:small, url}
       %{"height" => height, "url" => url} when height in 200..449 -> {:medium, url}
       %{"height" => height, "url" => url} when height >= 450 -> {:large, url}
+      %{"url" => url} -> {:large, url}
     end)
   end
+
+  defp present_items(items) when is_list(items), do: Enum.filter(items, &is_map/1)
+  defp present_items(_), do: []
 
   defp parse_search_results(results, types) do
     Enum.reduce(types, %{}, fn
@@ -869,6 +991,7 @@ defmodule Tune.Spotify.Client.HTTP do
         albums =
           results
           |> get_in(["albums", "items"])
+          |> present_items()
           |> Enum.map(&parse_album/1)
 
         total = get_in(results, ["albums", "total"])
@@ -879,6 +1002,7 @@ defmodule Tune.Spotify.Client.HTTP do
         artists =
           results
           |> get_in(["artists", "items"])
+          |> present_items()
           |> Enum.map(&parse_artist/1)
 
         total = get_in(results, ["artists", "total"])
@@ -889,6 +1013,7 @@ defmodule Tune.Spotify.Client.HTTP do
         tracks =
           results
           |> get_in(["tracks", "items"])
+          |> present_items()
           |> Enum.map(&parse_track/1)
 
         total = get_in(results, ["tracks", "total"])
@@ -899,6 +1024,7 @@ defmodule Tune.Spotify.Client.HTTP do
         shows =
           results
           |> get_in(["shows", "items"])
+          |> present_items()
           |> Enum.map(&parse_show/1)
 
         total = get_in(results, ["shows", "total"])
@@ -909,6 +1035,7 @@ defmodule Tune.Spotify.Client.HTTP do
         episodes =
           results
           |> get_in(["episodes", "items"])
+          |> present_items()
           |> Enum.map(&parse_episode/1)
 
         total = get_in(results, ["episodes", "total"])
@@ -919,11 +1046,12 @@ defmodule Tune.Spotify.Client.HTTP do
         playlists =
           results
           |> get_in(["playlists", "items"])
+          |> present_items()
           |> Enum.map(&parse_playlist/1)
 
         total = get_in(results, ["playlists", "total"])
 
-        Map.put(acc, :playlists, %{items: playlists, total: total})
+        Map.put(acc, :playlist, %{items: playlists, total: total})
     end)
   end
 
@@ -939,13 +1067,13 @@ defmodule Tune.Spotify.Client.HTTP do
         |> Map.get("images")
         |> parse_thumbnails(),
       tracks:
-        case get_in(item, ["tracks", "items"]) do
+        case get_in(item, ["items", "items"]) || get_in(item, ["tracks", "items"]) do
           nil ->
             :not_fetched
 
           items ->
             items
-            |> get_in([Access.all(), "track"])
+            |> Enum.map(fn entry -> Map.get(entry, "item") || Map.get(entry, "track") end)
             |> Enum.reject(&is_nil/1)
             |> Enum.map(&parse_track/1)
         end

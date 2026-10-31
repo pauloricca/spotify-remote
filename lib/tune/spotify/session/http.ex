@@ -289,6 +289,36 @@ defmodule Tune.Spotify.Session.HTTP do
   end
 
   @impl true
+  def library(session_id, kind, opts) do
+    GenStateMachine.call(via(session_id), {:library, kind, opts})
+  end
+
+  @impl true
+  def queue(session_id) do
+    GenStateMachine.call(via(session_id), :queue)
+  end
+
+  @impl true
+  def saved_items(session_id, uris) do
+    GenStateMachine.call(via(session_id), {:saved_items, uris})
+  end
+
+  @impl true
+  def set_saved(session_id, uri, saved) do
+    GenStateMachine.call(via(session_id), {:set_saved, uri, saved})
+  end
+
+  @impl true
+  def set_shuffle(session_id, enabled) do
+    GenStateMachine.call(via(session_id), {:set_shuffle, enabled})
+  end
+
+  @impl true
+  def set_repeat(session_id, mode) do
+    GenStateMachine.call(via(session_id), {:set_repeat, mode})
+  end
+
+  @impl true
   def get_player_token(session_id) do
     GenStateMachine.call(via(session_id), :get_player_token)
   end
@@ -477,6 +507,49 @@ defmodule Tune.Spotify.Session.HTTP do
   ################################################################################
   ########################### INTERNAL IMPLEMENTATION ############################
   ################################################################################
+
+  # These on-demand requests use the same token refresh/error handling as playback.
+  defp reply_to_request(from, result, data) do
+    case result do
+      :ok -> {:keep_state_and_data, {:reply, from, :ok}}
+      {:ok, _} -> {:keep_state_and_data, {:reply, from, result}}
+      error -> handle_common_errors(error, data, from)
+    end
+  end
+
+  defp reply_to_playback_request(from, :ok, _data),
+    do: {:keep_state_and_data, [{:next_event, :internal, :get_now_playing}, {:reply, from, :ok}]}
+
+  defp reply_to_playback_request(from, error, data), do: handle_common_errors(error, data, from)
+
+  defp handle_authenticated_call(from, {:library, kind, opts}, data),
+    do: reply_to_request(from, spotify_client().library(data.credentials.token, kind, opts), data)
+
+  defp handle_authenticated_call(from, :queue, data),
+    do: reply_to_request(from, spotify_client().queue(data.credentials.token), data)
+
+  defp handle_authenticated_call(from, {:saved_items, uris}, data),
+    do: reply_to_request(from, spotify_client().saved_items(data.credentials.token, uris), data)
+
+  defp handle_authenticated_call(from, {:set_saved, uri, saved}, data),
+    do:
+      reply_to_request(from, spotify_client().set_saved(data.credentials.token, uri, saved), data)
+
+  defp handle_authenticated_call(from, {:set_shuffle, enabled}, data),
+    do:
+      reply_to_playback_request(
+        from,
+        spotify_client().set_shuffle(data.credentials.token, enabled),
+        data
+      )
+
+  defp handle_authenticated_call(from, {:set_repeat, mode}, data),
+    do:
+      reply_to_playback_request(
+        from,
+        spotify_client().set_repeat(data.credentials.token, mode),
+        data
+      )
 
   defp handle_authenticated_call(from, :get_profile, data) do
     action = {:reply, from, data.user}

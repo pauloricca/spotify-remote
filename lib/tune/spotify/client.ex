@@ -67,6 +67,13 @@ defmodule Tune.Spotify.Client do
               :ok | {:error, term()}
   @callback transfer_playback(token(), device_id :: Device.id()) :: :ok | {:error, term()}
 
+  @callback library(token(), atom(), keyword()) :: {:ok, map()} | {:error, term()}
+  @callback queue(token()) :: {:ok, map()} | {:error, term()}
+  @callback saved_items(token(), [String.t()]) :: {:ok, [boolean()]} | {:error, term()}
+  @callback set_saved(token(), String.t(), boolean()) :: :ok | {:error, term()}
+  @callback set_shuffle(token(), boolean()) :: :ok | {:error, term()}
+  @callback set_repeat(token(), String.t()) :: :ok | {:error, term()}
+
   ## CONTENT
   @callback get_album(token(), album_id :: Album.id()) :: {:ok, Album.t()} | {:error, term()}
   @callback get_artist(token(), artist_id :: Artist.id()) :: {:ok, Artist.t()} | {:error, term()}

@@ -1,25 +1,13 @@
-<div class="mini-player" phx-hook="GlobalShortcuts">
-  <%= if @premium? do %>
-    <div class="device">
-      <%= if Enum.empty?(@devices) do %>
-        <%= content_tag :p, gettext("No devices available"), class: "notice" %>
-      <% else %>
-        <%= render PlayerView, "icon_device.html", [] %>
-        <form action="#" method="get" phx-submit="transfer_playback">
-          <%= content_tag :label, gettext("Switch playback device"), for: "device", class: "visually-hidden" %>
-          <select name="device" id="device" phx-change="transfer_playback">
-            <%= devices_options(@devices, @device_name) %>
-          </select>
-          <%= content_tag :button, gettext("Select"), type: "submit" %>
-        </form>
-      <% end %>
-    </div>
-  <% end %>
+<div id="mini-player" class="mini-player" phx-hook="GlobalShortcuts">
+  <button class="device icon-button" id="device-button" phx-click="open_devices" aria-label="Choose playback device" title="Choose playback device">
+    <%= render TuneWeb.HeaderView, "icon.html", name: :device %>
+  </button>
+  <button class="queue-button icon-button" phx-click="open_queue" aria-label="Open queue" title="Open queue"><%= render TuneWeb.HeaderView, "icon.html", name: :queue %></button>
   <%= case @now_playing do %>
     <% %{status: :not_playing} -> %>
       <%= content_tag :p, gettext("Not playing") %>
     <% %{status: status, item: item, progress_ms: progress_ms, device: device} -> %>
-      <%= live_patch to: TuneWeb.SearchView.result_link(item, @socket) do %>
+      <%= live_patch to: Routes.explorer_path(@socket, :now_playing) do %>
         <%= img_tag thumbnail(item), alt: name(item) %>
       <% end %>
       <%= render PlayerView, "meta.html", item: item, socket: @socket %>

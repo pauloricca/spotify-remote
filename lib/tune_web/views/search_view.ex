@@ -2,15 +2,15 @@ defmodule TuneWeb.SearchView do
   @moduledoc false
   use TuneWeb, :view
 
-  @default_medium_thumbnail "https://via.placeholder.com/150"
-
   alias Tune.Spotify.Schema
-  alias Schema.{Album, Artist, Episode, Show, Track}
+  alias Schema.{Album, Artist, Episode, Show, Track, Playlist}
   alias TuneWeb.PaginationView
 
-  @type result_item() :: Album.t() | Artist.t() | Episode.t() | Show.t() | Track.t()
+  @type result_item() ::
+          Album.t() | Artist.t() | Episode.t() | Show.t() | Track.t() | Playlist.t()
 
   @spec name(result_item()) :: String.t()
+  def name(%Playlist{name: name}), do: name
   def name(%Track{name: name}), do: name
   def name(%Album{name: name}), do: name
   def name(%Show{name: name}), do: name
@@ -47,8 +47,12 @@ defmodule TuneWeb.SearchView do
   end
 
   defp authors(%Artist{}, _socket), do: nil
+  defp authors(%Playlist{}, _socket), do: "Playlist"
 
   @spec result_link(result_item(), Phoenix.Socket.t()) :: String.t()
+  def result_link(%Playlist{id: id}, socket),
+    do: Routes.explorer_path(socket, :playlist_details, id)
+
   def result_link(%Track{album: album}, socket) do
     Routes.explorer_path(socket, :album_details, album.id)
   end
@@ -84,25 +88,5 @@ defmodule TuneWeb.SearchView do
   def release_date(_other), do: nil
 
   @spec thumbnail(result_item()) :: String.t()
-  defp thumbnail(%Track{album: album}),
-    do: resolve_thumbnail(album.thumbnails, [:small, :medium])
-
-  defp thumbnail(%Album{thumbnails: thumbnails}),
-    do: resolve_thumbnail(thumbnails, [:small, :medium])
-
-  defp thumbnail(%Artist{thumbnails: thumbnails}),
-    do: resolve_thumbnail(thumbnails, [:small, :medium])
-
-  defp thumbnail(%Show{thumbnails: thumbnails}),
-    do: resolve_thumbnail(thumbnails, [:small, :medium])
-
-  defp thumbnail(%Episode{thumbnails: thumbnails}),
-    do: resolve_thumbnail(thumbnails, [:small, :medium])
-
-  @spec resolve_thumbnail(Schema.thumbnails(), [Schema.thumbnail_size()]) :: String.t()
-  defp resolve_thumbnail(thumbnails, preferred_sizes) do
-    Enum.find_value(thumbnails, @default_medium_thumbnail, fn {size, url} ->
-      if size in preferred_sizes, do: url
-    end)
-  end
+  defp thumbnail(item), do: TuneWeb.RemoteView.artwork(item)
 end

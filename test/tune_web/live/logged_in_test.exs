@@ -11,6 +11,16 @@ defmodule TuneWeb.LoggedInTest do
 
   setup :verify_on_exit!
 
+  setup do
+    Tune.Spotify.Session.Mock
+    |> stub(:saved_items, fn _, uris -> {:ok, Enum.map(uris, fn _ -> false end)} end)
+    |> stub(:recently_played_tracks, fn _, _ -> {:ok, []} end)
+    |> stub(:top_tracks, fn _, _ -> {:ok, []} end)
+    |> stub(:get_recommendations_from_artists, fn _, _ -> {:ok, []} end)
+
+    :ok
+  end
+
   describe "mini player" do
     test "it displays not playing", %{conn: conn} do
       # Not necessary to run this as a property, as it doesn't have much
@@ -77,7 +87,9 @@ defmodule TuneWeb.LoggedInTest do
 
         new_player = %{player | item: second_item, progress_ms: second_item.duration_ms - 100}
 
-        expect_single_recently_played_tracks(session_id, recently_played_tracks, 50)
+        if item != second_item,
+          do: expect_single_recently_played_tracks(session_id, recently_played_tracks, 50)
+
         send(explorer_live.pid, {:now_playing, new_player})
 
         escaped_item_name = escape(second_item.name)
@@ -93,7 +105,7 @@ defmodule TuneWeb.LoggedInTest do
               profile <- Generators.premium_profile(),
               item <- Generators.playable_item(),
               device <- Generators.device(),
-              volume_percent <- Generators.volume_percent()
+              volume_percent <- integer(0..100)
             ) do
         conn = init_test_session(conn, spotify_id: session_id, spotify_credentials: credentials)
         expect_successful_authentication(session_id, credentials, profile)
@@ -577,10 +589,11 @@ defmodule TuneWeb.LoggedInTest do
 
       {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :suggestions))
 
-      assert html =~ "Cannot display Release Radar - Make sure you have access to the playlist."
+      assert html =~ "Recently Played"
+      refute html =~ "Cannot display Release Radar"
 
       assert render(explorer_live) =~
-               "Cannot display Release Radar - Make sure you have access to the playlist."
+               "Recently Played"
     end
 
     property "with release radar playlist", %{conn: conn} do
@@ -763,6 +776,7 @@ defmodule TuneWeb.LoggedInTest do
 
   defp expect_no_release_radar_playlist(session_id) do
     Tune.Spotify.Session.Mock
+    |> expect(:recently_played_tracks, 2, fn ^session_id, [limit: 50] -> {:ok, []} end)
     |> expect(:search, 2, fn ^session_id, "Release Radar", [types: [:playlist], limit: 1] ->
       {:ok, %{playlists: %{items: [], total: 0}}}
     end)

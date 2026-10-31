@@ -1,8 +1,8 @@
 <div class="progress">
   <span class="duration"><%= Tune.Duration.hms(@progress_ms) %></span>
-  <%= content_tag :label, gettext("Current track position"), for: "progress-bar", class: "visually-hidden" %>
+  <%= content_tag :label, gettext("Current track position"), for: "#{@id}-bar", class: "visually-hidden" %>
   <progress
-    id="progress-bar"
+    id="<%= @id %>-bar"
     <%= if @premium? do %>
       phx-hook="ProgressBar"
     <% end %>

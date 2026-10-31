@@ -5,11 +5,8 @@ defmodule TuneWeb.ShowView do
   alias Tune.Spotify.Schema.Show
   alias TuneWeb.EpisodeView
 
-  @default_artwork "https://via.placeholder.com/300"
-
   @spec artwork(Show.t()) :: String.t()
-  defp artwork(%Show{thumbnails: thumbnails}),
-    do: Map.get(thumbnails, :medium, @default_artwork)
+  defp artwork(%Show{} = item), do: TuneWeb.RemoteView.artwork(item)
 
   @spec total_episodes(pos_integer()) :: String.t()
   defp total_episodes(total_episodes) do

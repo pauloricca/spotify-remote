@@ -1,80 +1,50 @@
 export default {
   mounted() {
-    const logo = document.querySelector(".sidebar .brand");
-    const modal = document.querySelector("#help");
-    const modalOverlay = document.querySelector("#modal-overlay");
-    const closeButton = document.querySelector("#close-button");
-    const openButton = document.querySelector("#open-button");
-    const searchInput = document.querySelector("#q");
-    const navBar = document.querySelector("#navbar");
-    const deviceSelector = document.querySelector("#device");
-
-    closeButton.addEventListener("click", function () {
-      modal.classList.toggle("closed");
-      modalOverlay.classList.toggle("closed");
-    });
-
-    openButton.addEventListener("click", function () {
-      modal.classList.toggle("closed");
-      modalOverlay.classList.toggle("closed");
-    });
-
-    document.addEventListener("keydown", (event) => {
-      switch (event.key) {
-        case " ":
-          event.preventDefault();
-          this.pushEvent("toggle_play_pause", {});
-          break;
-        case "a":
-          this.pushEvent("prev", {});
-          break;
-        case "d":
-          this.pushEvent("next", {});
-          break;
-        case "w":
-          this.pushEvent("inc_volume", {});
-          break;
-        case "s":
-          this.pushEvent("dec_volume", {});
-          break;
-        case "h":
-          logo.click();
-          break;
-        case "?":
-          modal.classList.toggle("closed");
-          modalOverlay.classList.toggle("closed");
-          break;
-        case "Escape":
-          modal.classList.add("closed");
-          modalOverlay.classList.add("closed");
-          break;
-        case "/":
-          event.preventDefault();
-          navBar.scrollIntoView();
-          searchInput.focus();
-          break;
-        case "q":
-          if (deviceSelector) deviceSelector.focus();
-          break;
-        case "n":
-          // We delay resolving this element as it gets added
-          // and removed as needed
-          const nextPageLink = document.querySelector("#next-page");
-          if (nextPageLink) {
-            nextPageLink.click();
-          }
-          break;
-        case "p":
-          // We delay resolving this element as it gets added
-          // and removed as needed
-          const previousPageLink = document.querySelector("#previous-page");
-          if (previousPageLink) {
-            previousPageLink.click();
-          }
-          break;
-        default:
-          break;
+    this.toggleHelp = () => {
+      document.querySelector("#help").classList.toggle("closed");
+      document.querySelector("#modal-overlay").classList.toggle("closed");
+    };
+    this.helpClick = (event) => {
+      if (event.target.closest("#open-button, #close-button")) {
+        event.preventDefault();
+        this.toggleHelp();
       }
-    });
+    };
+    this.keydown = (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.target.closest("input, textarea, select, [contenteditable], [role=dialog]")) return;
+      if (event.target.closest("button, a, summary") && event.key === " ") return;
+      switch (event.key) {
+        case " ": event.preventDefault(); this.pushEvent("toggle_play_pause", {}); break;
+        case "a": this.pushEvent("prev", {}); break;
+        case "d": this.pushEvent("next", {}); break;
+        case "w": this.pushEvent("inc_volume", {}); break;
+        case "s": this.pushEvent("dec_volume", {}); break;
+        case "h": document.querySelector(".sidebar .brand").click(); break;
+        case "?": this.toggleHelp(); break;
+        case "Escape":
+          document.querySelector("#help").classList.add("closed");
+          document.querySelector("#modal-overlay").classList.add("closed");
+          break;
+        case "/": event.preventDefault(); document.querySelector("#q").focus(); break;
+        case "q": this.pushEvent("open_devices", {}); break;
+        case "n": {
+          const link = document.querySelector("#next-page");
+          if (link) link.click();
+          break;
+        }
+        case "p": {
+          const link = document.querySelector("#previous-page");
+          if (link) link.click();
+          break;
+        }
+        default: break;
+      }
+    };
+    document.addEventListener("click", this.helpClick);
+    document.addEventListener("keydown", this.keydown);
+  },
+  destroyed() {
+    document.removeEventListener("click", this.helpClick);
+    document.removeEventListener("keydown", this.keydown);
   },
 };

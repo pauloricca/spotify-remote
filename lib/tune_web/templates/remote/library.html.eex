@@ -1,0 +1,20 @@
+<div class="page-heading"><h1>Your Library</h1></div>
+<nav class="chips" aria-label="Library filters">
+  <%= for {kind, label} <- [{:playlists, "Playlists"}, {:artists, "Artists"}, {:albums, "Albums"}, {:shows, "Podcasts"}, {:tracks, "Liked Songs"}] do %>
+    <%= live_patch label, to: Routes.explorer_path(@socket, :library, type: kind), class: "chip #{if @kind == kind, do: "active"}", aria_current: (if @kind == kind, do: "page", else: "false") %>
+  <% end %>
+</nav>
+<%= if @error do %>
+  <div class="empty-state" role="status"><h2>Your library couldn’t load</h2><p><%= error_message(@error) %></p>
+    <%= if @error == 403 do %><a href="/auth/spotify" class="button">Reconnect Spotify</a><% end %>
+    <%= live_patch "Try again", to: Routes.explorer_path(@socket, :library, type: @kind), class: "outline-button" %>
+  </div>
+<% else %>
+  <div class="section-heading"><h2><%= if @kind == :artists, do: "Following", else: "Recently Added" %></h2><span class="muted"><%= @page.total %> items</span></div>
+  <%= if @page.items == [] do %>
+    <div class="empty-state"><h2>Make room for your favourites</h2><p>Your saved music will appear here.</p><%= live_patch "Find something to love", to: Routes.explorer_path(@socket, :search), class: "button" %></div>
+  <% else %>
+    <div class="results library-grid"><%= render_many @page.items, __MODULE__, "card.html", as: :item, socket: @socket %></div>
+    <%= if @page.next do %><div class="library-pagination"><%= live_patch "Next page →", to: library_url(@socket, @kind, @page.next), class: "outline-button" %></div><% end %>
+  <% end %>
+<% end %>

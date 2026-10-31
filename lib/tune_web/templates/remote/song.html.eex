@@ -1,0 +1,5 @@
+<button class="song-row" phx-click="play" phx-value-uri="<%= @item.uri %>" aria-label="Play <%= @item.name %> now" data-test-queue-item="<%= @item.id %>">
+  <%= img_tag artwork(@item), alt: "", loading: "lazy" %>
+  <span class="song-meta"><span class="song-name"><%= @item.name %></span><small><%= byline(@item) %></small></span>
+  <span class="song-duration"><%= Tune.Duration.hms(@item.duration_ms) %></span>
+</button>

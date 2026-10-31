@@ -1526,3 +1526,94 @@ input[type=range]::-webkit-slider-thumb {
 .top-result img {
   object-position:65% center;
 }
+/* Connected app screens. All media and playback state come from Spotify. */
+.remote-shell .cover-link { display: block; height: 100%; }
+.result .artwork { position: relative; }
+.card-play { position: absolute; right: 10px; bottom: 10px; opacity: 0; transform: translateY(5px); transition: opacity .18s, transform .18s; }
+.result:hover .card-play, .result:focus-within .card-play { opacity: 1; transform: none; }
+.card-play svg { width: 22px; height: 22px; fill: currentColor; }
+.mini-player { grid-template-columns: 48px minmax(110px,1fr) minmax(160px,1.5fr) 30px 30px 130px; }
+.mini-player .queue-button { grid-column: 4; grid-row: 1 / 3; padding: 5px; }
+.mini-player button.device { grid-column: 5; }
+.mini-player .volume { grid-column: 6; width: 130px; }
+.mini-player .volume .button-group { justify-content: flex-end; }
+.mini-player .volume input { width: 90px; }
+.mini-player .queue-button svg, .mini-player button.device svg { width: 18px; height: 18px; fill: none; stroke: currentColor; }
+.mini-player .meta .authors { font-size: 10px; }
+.is-active, .icon-button.is-active, .save-button.is-saved { color: var(--green); }
+.save-button.is-saved svg { fill: var(--green); }
+.now-title { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+.now-title h1 { overflow-wrap: anywhere; }
+.now-tools { display: flex; justify-content: space-between; }
+.live-now-playing .progress { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 24px; }
+.live-now-playing .progress progress { grid-column: 1 / 3; grid-row: 1; width: 100%; height: 4px; cursor: pointer; }
+.live-now-playing .progress .duration { grid-row: 2; font-size: 11px; color: #ccc; }
+.live-now-playing .progress .total_duration { grid-row: 2; justify-self: end; font-size: 11px; color: #ccc; }
+.big-player-controls button svg { width: 23px; height: 23px; fill: currentColor; }
+.big-player-controls button .icon { fill: none; }
+.live-now-playing .device-status { margin-top: 18px; }
+.live-now-playing .now-cover { aspect-ratio: 1; object-fit: cover; }
+.live-now-playing .now-details { min-width: 0; }
+.live-drawer { z-index: 31; outline: none; }
+.panel-backdrop { position: absolute; inset: 0; z-index: 30; background: #0005; }
+.live-drawer .panel-label { font-size: 12px; margin-top: 22px; margin-bottom: 8px; }
+.song-meta { min-width: 0; flex: 1; }
+.song-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-drawer .song-row { padding: 8px; }
+.live-drawer .song-row img { flex-shrink: 0; }
+.panel-volume { display: flex; align-items: center; gap: 12px; margin: 24px 0; font-size: 11px; }
+.panel-volume input { width: 100%; min-width: 0; }
+.panel-volume svg { flex-shrink: 0; }
+.device-row:disabled { opacity: .45; cursor: not-allowed; }
+.library-pagination { display: flex; justify-content: flex-end; margin-top: 30px; }
+.empty-state .button, .empty-state .outline-button { display: inline-block; margin: 8px; }
+.search-columns .top-result { margin-bottom: 20px; }
+.top-result .artist-cover { object-fit: cover; }
+.media>.empty-state { max-width: 650px; margin: auto; }
+.alert { left: 20%; right: 5%; width: auto; padding: 12px 18px; color: #17291d; background: #d6f4df; box-shadow: 0 6px 30px #0005; font-size: 12px; }
+.alert-danger { background: #f4d6d6; color: #402020; }
+.search-type-chips { margin-top: 4px; }
+@media (hover: none) { .card-play { opacity: 1; transform: none; width: 35px; height: 35px; } }
+@media (max-width: 1000px) {
+  .mini-player { grid-template-columns: 42px minmax(90px,1fr) minmax(130px,1fr) 28px 28px 100px; gap: 0 7px; }
+  .mini-player .volume { width: 100px; }
+  .mini-player .volume input { width: 65px; }
+}
+@media (max-width: 650px) {
+  .mini-player { grid-template-columns: 36px minmax(55px,1fr) 92px 25px 25px; gap: 0 5px; }
+  .mini-player .queue-button { grid-column: 4; grid-row: 1; }
+  .mini-player button.device { grid-column: 5; grid-row: 1; }
+  .mini-player .volume { display: none; }
+  .mini-player .progress { grid-column: 1 / 6; }
+  .mini-player .controls .button-group { gap: 4px; }
+  .mini-player .controls .button { padding: 3px; }
+  .mini-player .meta .name { max-width: 100%; }
+  .mini-player .meta .authors { max-width: 100%; font-size: 9px; }
+  .live-now-playing { padding: 0; }
+  .live-now-playing h1 { font-size: 24px; }
+  .live-now-playing .big-player-controls { margin: 18px 0; }
+  .live-now-playing .device-status { font-size: 10px; }
+  .now-nav { font-size: 8px; }
+  .alert { left: 75px; right: 12px; top: 65px; }
+}
+.artist-page .details.artist-hero { position: relative; display: grid; grid-template-columns: 145px minmax(0,1fr); align-items: end; min-height: 275px; padding: 28px; margin: -14px -28px 24px; border-radius: 0; overflow: hidden; background: #73463b; }
+.artist-page .details .artist-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 35%; opacity: .52; mask-image: linear-gradient(90deg, transparent, #000); }
+.artist-page .details .artwork { position: relative; z-index: 1; width: 145px; height: 145px; }
+.artist-page .details .meta { position: relative; z-index: 1; }
+.artist-page .details .meta h1 { font-size: 38px; text-shadow: 0 2px 20px #0004; }
+.artist-page .details .meta p { color: #ffffffc9; }
+.artist-page .details .reference-links { align-items: center; }
+.artist-page .details .reference-links .outline-button { order: 2; }
+.result>a.name { display: block; }
+.login-note { font-size: 12px; margin: 24px 0 0; }
+.availability-note { font-size: 11px; margin: 18px 0; opacity: .65; }
+@media (max-width: 1000px) { .artist-page .details.artist-hero { margin: -12px -22px 24px; } }
+@media (max-width: 650px) {
+  .artist-page .details.artist-hero { grid-template-columns: 80px minmax(0,1fr); padding: 20px; gap: 15px; margin: -8px -16px 20px; min-height: 250px; }
+  .artist-page .details .artwork { width: 80px; height: 80px; }
+  .artist-page .details .meta h1 { font-size: 25px; }
+  .artist-page .details .reference-links { flex-wrap: wrap; gap: 8px; }
+  .artist-page .details .reference-links a { display: none; }
+}
+.artist-page .details .artist-backdrop { border-radius: 0; box-shadow: none; }
+.artist-page .details .reference-links a { order: 3; }

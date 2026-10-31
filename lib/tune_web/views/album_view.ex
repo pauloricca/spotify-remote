@@ -5,8 +5,6 @@ defmodule TuneWeb.AlbumView do
   alias Tune.{Link, Spotify.Schema.Album, Spotify.Schema.Copyright}
   alias TuneWeb.TrackView
 
-  @default_artwork "https://via.placeholder.com/300"
-
   defp authors(%Album{artists: artists}, socket) do
     artists
     |> Enum.map(fn artist ->
@@ -16,8 +14,7 @@ defmodule TuneWeb.AlbumView do
   end
 
   @spec artwork(Album.t()) :: String.t()
-  defp artwork(%Album{thumbnails: thumbnails}),
-    do: Map.get(thumbnails, :medium, @default_artwork)
+  defp artwork(%Album{} = item), do: TuneWeb.RemoteView.artwork(item)
 
   @spec total_duration(Album.t()) :: String.t()
   defp total_duration(album) do
@@ -37,7 +34,7 @@ defmodule TuneWeb.AlbumView do
   end
 
   @spec genre(Album.t()) :: nil | String.t()
-  defp genre(%Album{genres: []}), do: nil
+  defp genre(%Album{genres: genres}) when genres in [nil, []], do: nil
 
   defp genre(%Album{genres: genres}) do
     content_tag :h3, class: "genre" do

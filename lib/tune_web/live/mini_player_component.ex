@@ -4,7 +4,7 @@ defmodule TuneWeb.MiniPlayerComponent do
 
   alias TuneWeb.{PlayerView, ProgressBarComponent}
 
-  @default_small_thumbnail "https://via.placeholder.com/48"
+  @default_small_thumbnail "/images/music-placeholder.svg"
 
   alias Tune.Spotify.Schema.{Episode, Track}
 
@@ -18,24 +18,4 @@ defmodule TuneWeb.MiniPlayerComponent do
   @spec name(Track.t() | Episode.t()) :: String.t()
   defp name(%Episode{name: name}), do: name
   defp name(%Track{name: name}), do: name
-
-  defp devices_options([], _device_name), do: nil
-
-  defp devices_options(devices, device_name) do
-    active_device_name =
-      case Enum.find(devices, fn d -> d.is_active end) do
-        nil -> nil
-        active_device -> active_device.id
-      end
-
-    devices
-    |> Enum.map(fn d ->
-      if d.name == device_name do
-        {d.name <> " (" <> gettext("this device") <> ")", d.id}
-      else
-        {d.name, d.id}
-      end
-    end)
-    |> options_for_select(active_device_name)
-  end
 end

@@ -5,7 +5,8 @@
     </div>
   <% _artist -> %>
     <article class="item artist-page" data-test-id="<%= @artist.id %>">
-      <section class="details">
+      <section class="details artist-hero">
+        <%= img_tag artwork(@artist), alt: "", class: "artist-backdrop" %>
         <div class="artwork">
           <div class="play-button" phx-click="play" phx-value-uri="<%= @artist.uri %>">
             <%= render TuneWeb.PlayerView, "icon_play.html", []%>
@@ -13,10 +14,12 @@
           <%= img_tag artwork(@artist), alt: @artist.name %>
         </div>
         <div class="meta">
+          <p class="eyebrow">Artist</p>
           <%= content_tag :h1, @artist.name %>
           <%= content_tag :p, total_albums(@artist) %>
           <%= genre(@artist) %>
           <div class="reference-links">
+            <button class="outline-button" phx-click="toggle_saved" phx-value-uri="<%= @artist.uri %>"><%= if Map.get(@saved_items, @artist.uri, false), do: "Following", else: "Follow" %></button>
             <button class="play-round" phx-click="play" phx-value-uri="<%= @artist.uri %>" aria-label="Play <%= @artist.name %>">
               <%= render TuneWeb.PlayerView, "icon_play.html", [] %>
             </button>
