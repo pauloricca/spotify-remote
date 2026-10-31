@@ -4,11 +4,44 @@ defmodule TuneWeb.AuthController do
   """
   use TuneWeb, :controller
 
+  plug :prepare_spotify_oauth when action == :request
+  plug :verify_spotify_oauth when action == :callback
   plug Ueberauth
+
+  defp prepare_spotify_oauth(conn, _opts) do
+    state = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+
+    conn
+    |> put_session(:spotify_oauth_state, state)
+    |> Map.update!(:params, fn params ->
+      params |> Map.put("state", state) |> Map.put("show_dialog", "false")
+    end)
+  end
+
+  defp verify_spotify_oauth(conn, _opts) do
+    expected = get_session(conn, :spotify_oauth_state)
+    received = conn.params["state"]
+    conn = delete_session(conn, :spotify_oauth_state)
+
+    if is_binary(expected) and is_binary(received) and
+         Plug.Crypto.secure_compare(expected, received) do
+      conn
+    else
+      conn
+      |> put_flash(:error, gettext("Please start Spotify sign-in again."))
+      |> redirect(to: Routes.auth_path(conn, :new))
+      |> halt()
+    end
+  end
 
   @spec callback(Plug.Conn.t(), any) :: Plug.Conn.t()
   def callback(%{assigns: %{ueberauth_auth: auth}} = conn, _params) do
-    premium? = get_in(auth.extra.raw_info, [:user, "product"]) == "premium"
+    premium? =
+      Tune.Spotify.Schema.User.premium?(%Tune.Spotify.Schema.User{
+        name: auth.info.name,
+        avatar_url: nil,
+        product: get_in(auth.extra.raw_info, [:user, "product"])
+      })
 
     conn =
       if premium? do
@@ -31,7 +64,7 @@ defmodule TuneWeb.AuthController do
     |> put_session(:spotify_credentials, auth.credentials)
     |> put_session(:spotify_id, auth.info.nickname)
     |> configure_session(renew: true)
-    |> redirect(to: Routes.explorer_path(conn, :suggestions))
+    |> redirect(to: Routes.explorer_path(conn, :search))
   end
 
   def callback(%{assigns: %{ueberauth_failure: _failure}} = conn, _params) do

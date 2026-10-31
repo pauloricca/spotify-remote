@@ -1,6 +1,6 @@
 export default {
   mounted() {
-    const logo = document.querySelector("#logo a");
+    const logo = document.querySelector(".sidebar .brand");
     const modal = document.querySelector("#help");
     const modalOverlay = document.querySelector("#modal-overlay");
     const closeButton = document.querySelector("#close-button");
@@ -54,7 +54,7 @@ export default {
           searchInput.focus();
           break;
         case "q":
-          deviceSelector.focus();
+          if (deviceSelector) deviceSelector.focus();
           break;
         case "n":
           // We delay resolving this element as it gets added

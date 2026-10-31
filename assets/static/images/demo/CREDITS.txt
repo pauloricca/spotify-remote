@@ -1,0 +1,14 @@
+Preview artwork
+
+Album cover images are retrieved from the Apple iTunes Search API for this
+non-commercial design reference. Album artwork belongs to the respective
+artists and labels. These images are used only by the standalone preview;
+the signed-in application displays artwork supplied by Spotify.
+
+Tame Impala at Flow Festival Helsinki, 10 August 2019
+Photographer: Raph_PH
+Source: https://commons.wikimedia.org/wiki/File:Tame_Impala_at_Flow_Festival_Helsinki_Aug_10_2019_-24.jpg
+Original: https://www.flickr.com/photos/69880995@N04/50012674293/
+License: Creative Commons Attribution 2.0
+https://creativecommons.org/licenses/by/2.0/
+Displayed as a cropped background and circular thumbnail.

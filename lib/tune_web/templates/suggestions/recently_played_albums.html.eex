@@ -1,7 +1,7 @@
-<article class="top-albums">
+<article class="top-albums" id="recently-played">
   <div class="filter">
     <div class="meta">
-      <%= content_tag :h1, gettext("Recently Played Albums") %>
+      <%= content_tag :h1, gettext("Recently Played") %>
       <%= content_tag :p, gettext("Generated from Recently Played Tracks.") %>
     </div>
   </div>

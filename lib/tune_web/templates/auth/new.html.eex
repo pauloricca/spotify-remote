@@ -1,4 +1,7 @@
-<div class="full-screen-notice">
-  <%= content_tag :p, "The application requires you to Login into your Spotify account." %>
-  <%= link gettext("Login via Spotify"), to: Routes.auth_path(@conn, :request, :spotify) %>
-</div>
+<main class="login-page">
+  <div class="brand"><%= render TuneWeb.HeaderView, "icon.html", name: :music %><span>tune</span></div>
+  <h1>Your music.<br>Your space.</h1>
+  <p>A little closer to the music you love.<br>Connect Spotify to start listening.</p>
+  <%= link gettext("Connect with Spotify"), to: Routes.auth_path(@conn, :request, :spotify), class: "button" %>
+  <a class="preview-link" href="/mockup.html">Explore the design preview →</a>
+</main>

@@ -107,7 +107,7 @@ defmodule Tune.Spotify.Client.HTTP do
   @impl true
   def next(token) do
     case post(@base_url <> "/me/player/next", <<>>, auth_headers(token)) do
-      {:ok, %{status: 204}} ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
       other_response ->
@@ -135,7 +135,7 @@ defmodule Tune.Spotify.Client.HTTP do
   @impl true
   def pause(token) do
     case json_put(@base_url <> "/me/player/pause", %{}, auth_headers(token)) do
-      {:ok, %{status: 204}} ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
       other_response ->
@@ -146,7 +146,7 @@ defmodule Tune.Spotify.Client.HTTP do
   @impl true
   def play(token) do
     case json_put(@base_url <> "/me/player/play", %{}, auth_headers(token)) do
-      {:ok, %{status: 204}} ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
       other_response ->
@@ -164,7 +164,7 @@ defmodule Tune.Spotify.Client.HTTP do
       end
 
     case json_put(@base_url <> "/me/player/play", payload, auth_headers(token)) do
-      {:ok, %{status: 204}} ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
       other_response ->
@@ -182,7 +182,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case json_put(@base_url <> "/me/player/play", payload, auth_headers(token)) do
-      {:ok, %{status: 204}} ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
       other_response ->
@@ -193,7 +193,7 @@ defmodule Tune.Spotify.Client.HTTP do
   @impl true
   def prev(token) do
     case post(@base_url <> "/me/player/previous", <<>>, auth_headers(token)) do
-      {:ok, %{status: 204}} ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
       other_response ->
@@ -212,7 +212,7 @@ defmodule Tune.Spotify.Client.HTTP do
            <<>>,
            auth_headers(token)
          ) do
-      {:ok, %{status: 204}} ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
       other_response ->
@@ -231,7 +231,7 @@ defmodule Tune.Spotify.Client.HTTP do
            <<>>,
            auth_headers(token)
          ) do
-      {:ok, %{status: 204}} ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
       other_response ->
@@ -246,7 +246,7 @@ defmodule Tune.Spotify.Client.HTTP do
     }
 
     case json_put(@base_url <> "/me/player", params, auth_headers(token)) do
-      {:ok, %{status: 204}} ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
 
       other_response ->
@@ -302,7 +302,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   @impl true
   def get_artist_albums(token, artist_id, opts) do
-    limit = Keyword.get(opts, :limit, @default_limit)
+    limit = opts |> Keyword.get(:limit, 10) |> max(1) |> min(10)
     offset = Keyword.get(opts, :offset, @default_offset)
     album_group = Keyword.get(opts, :album_group, :all)
 
@@ -736,7 +736,7 @@ defmodule Tune.Spotify.Client.HTTP do
       spotify_url: parse_spotify_url(item),
       albums: :not_fetched,
       total_albums: :not_fetched,
-      genres: Map.get(item, "genres"),
+      genres: Map.get(item, "genres") || [],
       thumbnails:
         if Map.has_key?(item, "images") do
           item

@@ -38,7 +38,7 @@ spotify_scope =
     user-read-recently-played
     user-top-read
   )
-  |> Enum.join(",")
+  |> Enum.join(" ")
 
 config :ueberauth, Ueberauth,
   providers: [

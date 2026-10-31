@@ -317,13 +317,13 @@ defmodule TuneWeb.ExplorerLive do
     q = Map.get(params, "q", "")
     type = Map.get(params, "type", "track")
     page = Map.get(params, "page", "1")
-    per_page = Map.get(params, "per_page", "24")
+    per_page = Map.get(params, "per_page", "10")
     socket = assign(socket, :page_title, gettext("Search results"))
 
     if String.length(q) >= 1 do
       type = parse_type(type)
       page = String.to_integer(page)
-      limit = String.to_integer(per_page)
+      limit = per_page |> String.to_integer() |> max(1) |> min(10)
       offset = max(page - 1, 0) * limit
 
       socket =
@@ -365,8 +365,10 @@ defmodule TuneWeb.ExplorerLive do
 
     limit =
       params
-      |> Map.get("per_page", "24")
+      |> Map.get("per_page", "10")
       |> String.to_integer()
+      |> max(1)
+      |> min(10)
 
     offset = max(page - 1, 0) * limit
 

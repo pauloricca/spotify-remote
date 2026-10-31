@@ -13,5 +13,8 @@ defmodule Tune.Spotify.Schema.User do
         }
 
   @spec premium?(t()) :: boolean()
+  # Development-mode Spotify apps require Premium, but /me no longer
+  # includes product. Let the playback API enforce eligibility in that case.
+  def premium?(%__MODULE__{product: nil}), do: true
   def premium?(%__MODULE__{product: product}), do: product == "premium"
 end

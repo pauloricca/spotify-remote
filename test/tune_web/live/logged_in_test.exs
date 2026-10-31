@@ -195,11 +195,11 @@ defmodule TuneWeb.LoggedInTest do
       expect_nothing_playing(session_id)
 
       {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :search))
-      assert html =~ "Try and search for a song you love"
-      assert html =~ "Try and search for a song you love"
+      assert html =~ "Browse all"
+      assert has_element?(explorer_live, ".browse-card", "New Releases")
 
-      assert render(explorer_live) =~ "Try and search for a song you love"
-      assert render(explorer_live) =~ "Try and search for a song you love"
+      assert render(explorer_live) =~ "Browse all"
+      assert render(explorer_live) =~ "Browse all"
     end
 
     test "it shows a notice when there are no results", %{conn: conn} do
@@ -221,7 +221,7 @@ defmodule TuneWeb.LoggedInTest do
       Tune.Spotify.Session.Mock
       |> expect(:search, 2, fn ^session_id,
                                "example search",
-                               [types: [:track], limit: 24, offset: 0] ->
+                               [types: [:track], limit: 10, offset: 0] ->
         {:ok, search_results}
       end)
 
@@ -259,7 +259,7 @@ defmodule TuneWeb.LoggedInTest do
         Tune.Spotify.Session.Mock
         |> expect(:search, 2, fn ^session_id,
                                  ^track_name,
-                                 [types: [:track], limit: 24, offset: 0] ->
+                                 [types: [:track], limit: 10, offset: 0] ->
           {:ok, search_results}
         end)
 
@@ -304,7 +304,7 @@ defmodule TuneWeb.LoggedInTest do
         Tune.Spotify.Session.Mock
         |> expect(:search, 2, fn ^session_id,
                                  ^item_name,
-                                 [types: [^search_type], limit: 24, offset: 0] ->
+                                 [types: [^search_type], limit: 10, offset: 0] ->
           {:ok, search_results}
         end)
 
@@ -359,7 +359,7 @@ defmodule TuneWeb.LoggedInTest do
         Tune.Spotify.Session.Mock
         |> expect(:search, 2, fn ^session_id,
                                  ^item_name,
-                                 [types: [^search_type], limit: 24, offset: 0] ->
+                                 [types: [^search_type], limit: 10, offset: 0] ->
           {:ok, search_results}
         end)
         |> expect(:play, 1, fn ^session_id, ^item_uri -> :ok end)
@@ -380,8 +380,12 @@ defmodule TuneWeb.LoggedInTest do
               credentials <- Generators.credentials(),
               session_id <- Generators.session_id(),
               profile <- Generators.profile(),
-              artist <- Generators.artist(),
-              albums <- uniq_list_of(Generators.album(), min_length: 1, max_length: 24)
+              artist <-
+                one_of([
+                  Generators.artist(),
+                  map(Generators.artist(), fn artist -> %{artist | genres: nil} end)
+                ]),
+              albums <- uniq_list_of(Generators.album(), min_length: 1, max_length: 10)
             ) do
         conn = init_test_session(conn, spotify_id: session_id, spotify_credentials: credentials)
         expect_successful_authentication(session_id, credentials, profile)
@@ -393,7 +397,7 @@ defmodule TuneWeb.LoggedInTest do
         |> expect(:get_artist, 2, fn ^session_id, ^artist_id -> {:ok, artist} end)
         |> expect(:get_artist_albums, 2, fn ^session_id,
                                             ^artist_id,
-                                            limit: 24,
+                                            limit: 10,
                                             offset: 0,
                                             album_group: :all ->
           {:ok, %{albums: albums, total: Enum.count(albums)}}
@@ -417,7 +421,7 @@ defmodule TuneWeb.LoggedInTest do
         assert render(explorer_live) =~ escaped_artist_name
 
         case artist.genres do
-          [] ->
+          genres when genres in [nil, []] ->
             refute has_element?(explorer_live, ".genre")
 
           genres ->

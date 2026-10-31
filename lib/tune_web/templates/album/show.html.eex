@@ -24,6 +24,9 @@
             <%= content_tag :span, total_duration(@album), class: "total-duration" %>
           <% end %>
           <div class="reference-links">
+            <button class="play-round" phx-click="play" phx-value-uri="<%= @album.uri %>" aria-label="Play <%= @album.name %>">
+              <%= render TuneWeb.PlayerView, "icon_play.html", [] %>
+            </button>
             <%= link to: @album.spotify_url, target: "_blank", class: "svg-link spotify" do %>
               <%= render TuneWeb.TrackView, "icon_spotify.html", [] %>
               <%= content_tag :span, gettext("Open in Spotify"), class: "visually-hidden" %>

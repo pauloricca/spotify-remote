@@ -4,7 +4,7 @@
       <p>Artist not available.</p>
     </div>
   <% _artist -> %>
-    <article class="item" data-test-id="<%= @artist.id %>">
+    <article class="item artist-page" data-test-id="<%= @artist.id %>">
       <section class="details">
         <div class="artwork">
           <div class="play-button" phx-click="play" phx-value-uri="<%= @artist.uri %>">
@@ -17,6 +17,9 @@
           <%= content_tag :p, total_albums(@artist) %>
           <%= genre(@artist) %>
           <div class="reference-links">
+            <button class="play-round" phx-click="play" phx-value-uri="<%= @artist.uri %>" aria-label="Play <%= @artist.name %>">
+              <%= render TuneWeb.PlayerView, "icon_play.html", [] %>
+            </button>
             <%= link to: @artist.spotify_url, target: "_blank", class: "svg-link spotify" do %>
               <%= render TuneWeb.TrackView, "icon_spotify.html", [] %>
               <%= content_tag :span, gettext("Open in Spotify"), class: "visually-hidden" %>

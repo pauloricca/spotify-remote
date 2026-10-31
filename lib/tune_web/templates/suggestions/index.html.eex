@@ -1,12 +1,11 @@
-<%= case @suggestions_playlist do %>
-  <% :not_fetched -> %>
-    <%= content_tag :p, gettext("Cannot display Release Radar.") %>
-  <% :not_present -> %>
-    <%= content_tag :p, gettext("Cannot display Release Radar - Make sure you have access to the playlist.") %>
-  <% playlist -> %>
-    <%= render PlaylistView, "show.html", playlist: playlist, now_playing: @now_playing, socket: @socket %>
+<div class="page-heading"><h1>Good morning</h1></div>
+<div class="mix-grid" aria-label="Find your next listen">
+  <%= for {title, query, color} <- [{"Discover Weekly", "discover weekly", "discover"}, {"Daily Mix 1", "daily mix", "daily"}, {"Chilled Vibes", "chill", "chill"}, {"Indie Favourites", "indie", "indie"}] do %>
+    <%= live_patch to: Routes.explorer_path(@socket, :search, q: query, type: "album"), class: "mix-card mix-#{color}" do %>
+      <span><%= title %></span>
+    <% end %>
   <% end %>
-
+</div>
 <%= case @suggestions_recently_played_albums do %>
   <% :not_fetched -> %>
     <%= content_tag :p, gettext("Cannot display recently played albums.") %>
@@ -37,4 +36,13 @@
       suggestions_recommended_tracks_time_range: @suggestions_recommended_tracks_time_range,
       now_playing: @now_playing,
       socket: @socket %>
+  <% end %>
+
+<%= case @suggestions_playlist do %>
+  <% :not_fetched -> %>
+    <%= content_tag :p, gettext("Cannot display Release Radar.") %>
+  <% :not_present -> %>
+    <%= content_tag :p, gettext("Cannot display Release Radar - Make sure you have access to the playlist.") %>
+  <% playlist -> %>
+    <%= render PlaylistView, "show.html", playlist: playlist, now_playing: @now_playing, socket: @socket %>
   <% end %>

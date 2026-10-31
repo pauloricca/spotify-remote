@@ -1,0 +1,20 @@
+services:
+  tune:
+    build:
+      context: .
+      dockerfile: Dockerfile.trial
+    env_file: .env.local
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - .:/app
+      - tune_deps:/app/deps
+      - tune_build:/app/_build
+      - tune_node_modules:/app/assets/node_modules
+      - tune_static:/app/priv/static
+
+volumes:
+  tune_deps:
+  tune_build:
+  tune_node_modules:
+  tune_static:

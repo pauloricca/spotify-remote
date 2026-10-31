@@ -1,8 +1,20 @@
 <main role="main">
-  <section id="explorer">
+  <section id="explorer" class="remote-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="/"><%= render TuneWeb.HeaderView, "icon.html", name: :music %><span>tune</span></a>
+      <%= live_patch to: Routes.explorer_path(@socket, :suggestions), class: "nav-item #{if @live_action == :suggestions, do: "active"}" do %>
+        <%= render TuneWeb.HeaderView, "icon.html", name: :home %><span>Home</span>
+      <% end %>
+      <%= live_patch to: Routes.explorer_path(@socket, :search), class: "nav-item #{if @live_action == :search, do: "active"}" do %>
+        <%= render TuneWeb.HeaderView, "icon.html", name: :search %><span>Search</span>
+      <% end %>
+      <a class="nav-item" href="/#recently-played" title="Your recently played albums">
+        <%= render TuneWeb.HeaderView, "icon.html", name: :library %><span>Recently played</span>
+      </a>
+      <div class="sidebar-caption">Your music. Your space.<span>Spotify connected</span></div>
+    </aside>
     <header>
       <nav id="navbar">
-        <%= render TuneWeb.HeaderView, "logo.html", socket: @socket %>
         <%= render TuneWeb.HeaderView, "search.html", socket: @socket, q: @q, type: @type %>
         <%= render TuneWeb.HeaderView, "profile.html", socket: @socket, user: @user %>
       </nav>
