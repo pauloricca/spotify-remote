@@ -26,6 +26,8 @@ defmodule TuneWeb.Endpoint do
   #
   # You should set gzip to true if you are running phx.digest
   # when deploying your static files in production.
+  plug :prevent_indexing
+
   plug Plug.Static,
     at: "/",
     from: :tune,
@@ -59,6 +61,10 @@ defmodule TuneWeb.Endpoint do
   plug Plug.Session, @session_options
   plug TuneWeb.Router
 
+  defp prevent_indexing(conn, _opts) do
+    Plug.Conn.put_resp_header(conn, "x-robots-tag", "noindex, nofollow")
+  end
+
   @impl true
   def init(_type, config) do
     %{web: runtime_overrides} = Vapor.load!(Tune.Config)
@@ -77,7 +83,7 @@ defmodule TuneWeb.Endpoint do
          config,
          :http,
          port: runtime_overrides.port,
-         transport_options: [socket_opts: [:inet6]]
+         ip: {0, 0, 0, 0}
        )}
     else
       {:ok, config}
