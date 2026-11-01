@@ -9,16 +9,16 @@ defmodule Tune.Spotify.Session.HTTPTest do
   alias Schema.{Album, Artist, Episode, Player, Playlist, Show, Track}
 
   @default_timeouts %{
-    refresh: 200,
+    refresh: 5000,
     retry: 100,
-    inactivity: 100
+    inactivity: 500
   }
 
   setup [:set_mox_global, :verify_on_exit!]
 
   describe "auth/profile" do
     @tag capture_log: true
-    property "with an expired token, the process stops" do
+    property "invalid credentials leave a readable session instead of crashing" do
       check all(
               credentials <- Generators.credentials(),
               session_id <- Generators.session_id(),
@@ -28,13 +28,13 @@ defmodule Tune.Spotify.Session.HTTPTest do
 
         Client.Mock
         |> expect(:get_profile, 1, fn ^token -> {:error, :invalid_token} end)
-
-        Process.flag(:trap_exit, true)
+        |> expect(:get_token, 1, fn _ -> {:error, 400} end)
 
         assert {:ok, session_pid} =
                  HTTP.start_link(session_id, credentials, timeouts: @default_timeouts)
 
-        assert_receive {:EXIT, ^session_pid, :invalid_token}
+        assert {:error, :invalid_refresh_token} == HTTP.get_profile(session_id)
+        assert Process.alive?(session_pid)
       end
     end
 
@@ -397,6 +397,7 @@ defmodule Tune.Spotify.Session.HTTPTest do
         # Transfer playback to the new device
 
         expect_transfer_playback(credentials.token, new_device.id)
+        expect_item_playing(credentials.token, item, new_device)
         assert :ok == HTTP.transfer_playback(session_id, new_device.id)
       end
     end
@@ -451,9 +452,12 @@ defmodule Tune.Spotify.Session.HTTPTest do
 
         timeouts =
           @default_timeouts
-          |> Map.put(:inactivity, 300)
+          |> Map.put(:inactivity, 1000)
+          |> Map.put(:refresh, 200)
 
-        assert {:ok, _session_pid} = HTTP.start_link(session_id, credentials, timeouts: timeouts)
+        assert {:ok, session_pid} = HTTP.start_link(session_id, credentials, timeouts: timeouts)
+
+        :ok = HTTP.subscribe(session_id)
 
         # Get initial devices
 
@@ -467,6 +471,7 @@ defmodule Tune.Spotify.Session.HTTPTest do
 
         assert_eventually [new_device] == HTTP.get_devices(session_id)
         assert_eventually new_player == HTTP.now_playing(session_id)
+        GenServer.stop(session_pid)
       end
     end
   end
@@ -688,6 +693,80 @@ defmodule Tune.Spotify.Session.HTTPTest do
 
         assert {:ok, top_tracks} == HTTP.top_tracks(session_id, top_tracks_options)
       end
+    end
+  end
+
+  describe "failure recovery" do
+    test "an on-demand expired token refreshes once and replies to the caller" do
+      credentials = Generators.credentials() |> Enum.take(1) |> hd()
+      new_credentials = Generators.credentials() |> Enum.take(1) |> hd()
+      profile = Generators.profile() |> Enum.take(1) |> hd()
+      id = "refresh-request"
+      expect_profile(credentials.token, profile)
+      expect_nothing_playing(credentials.token)
+      expect_no_devices(credentials.token)
+      start_supervised!({HTTP, {id, credentials}})
+      assert profile == HTTP.get_profile(id)
+
+      Client.Mock
+      |> expect(:queue, fn token ->
+        assert token == credentials.token
+        {:error, :expired_token}
+      end)
+      |> expect(:get_token, fn token ->
+        assert token == credentials.refresh_token
+        {:ok, new_credentials}
+      end)
+      |> expect(:queue, fn token ->
+        assert token == new_credentials.token
+        {:ok, %{queue: []}}
+      end)
+
+      assert {:ok, %{queue: []}} == HTTP.queue(id)
+      assert {:ok, new_credentials.token} == HTTP.get_player_token(id)
+    end
+
+    test "reads are cached and successful mutations invalidate them" do
+      credentials = Generators.credentials() |> Enum.take(1) |> hd()
+      profile = Generators.profile() |> Enum.take(1) |> hd()
+      id = "cached-reads"
+      expect_profile(credentials.token, profile)
+      expect_nothing_playing(credentials.token)
+      expect_no_devices(credentials.token)
+      start_supervised!({HTTP, {id, credentials}})
+      assert profile == HTTP.get_profile(id)
+      expect(Client.Mock, :saved_items, fn _, _ -> {:ok, [false]} end)
+      assert {:ok, [false]} == HTTP.saved_items(id, ["spotify:track:t1"])
+      assert {:ok, [false]} == HTTP.saved_items(id, ["spotify:track:t1"])
+      expect(Client.Mock, :set_saved, fn _, _, true -> :ok end)
+      assert :ok == HTTP.set_saved(id, "spotify:track:t1", true)
+      expect(Client.Mock, :saved_items, fn _, _ -> {:ok, [true]} end)
+      assert {:ok, [true]} == HTTP.saved_items(id, ["spotify:track:t1"])
+    end
+
+    test "a session with no browser subscribers does not poll" do
+      credentials = Generators.credentials() |> Enum.take(1) |> hd()
+      profile = Generators.profile() |> Enum.take(1) |> hd()
+      expect_profile(credentials.token, profile)
+      expect_nothing_playing(credentials.token)
+      expect_no_devices(credentials.token)
+
+      start_supervised!(
+        {HTTP,
+         {"idle-session", credentials,
+          [timeouts: %{refresh: 10, devices: 10, retry: 10, inactivity: 1000}]}}
+      )
+
+      assert profile == HTTP.get_profile("idle-session")
+      Process.sleep(60)
+
+      assert Process.alive?(
+               GenServer.whereis({:via, Registry, {Tune.Spotify.SessionRegistry, "idle-session"}})
+             )
+    end
+
+    test "missing sessions return an auth error instead of exiting the caller" do
+      assert {:error, :not_authenticated} == HTTP.queue("missing-session")
     end
   end
 

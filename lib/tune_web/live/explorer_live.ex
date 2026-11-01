@@ -83,41 +83,68 @@ defmodule TuneWeb.ExplorerLive do
   def mount(_params, session, socket) do
     case Tune.Auth.load_user(session) do
       {:authenticated, session_id, user} ->
-        now_playing = spotify_session().now_playing(session_id)
-        devices = spotify_session().get_devices(session_id)
+        {:ok, mount_session(socket, session_id, user, true)}
 
+      {:unavailable, session_id, reason} ->
         socket =
-          case spotify_session().get_player_token(session_id) do
-            {:ok, token} ->
-              assign(socket, :player_token, token)
+          mount_session(
+            socket,
+            session_id,
+            %User{name: "Spotify", avatar_url: nil, product: nil},
+            false
+          )
 
-            error ->
-              handle_spotify_session_result(error, socket)
-          end
+        {:noreply, socket} = handle_spotify_session_result({:error, reason}, socket)
+        {:ok, socket}
 
-        if connected?(socket) do
-          spotify_session().subscribe(session_id)
-        end
-
-        {:ok,
-         socket
-         |> assign(@initial_state)
-         |> assign(:static_changed, static_changed?(socket))
-         |> assign_new(:device_name, &generate_device_name/0)
-         |> assign(
-           session_id: session_id,
-           user: user,
-           premium?: User.premium?(user),
-           now_playing: now_playing,
-           devices: devices
-         )}
-
-      _error ->
+      _ ->
         {:ok, redirect(socket, to: "/auth/logout")}
     end
   end
 
+  defp mount_session(socket, session_id, user, ready?) do
+    player =
+      case spotify_session().now_playing(session_id) do
+        %Player{} = player -> player
+        _ -> %Player{}
+      end
+
+    devices =
+      case spotify_session().get_devices(session_id) do
+        devices when is_list(devices) -> devices
+        _ -> []
+      end
+
+    token =
+      case spotify_session().get_player_token(session_id) do
+        {:ok, token} -> token
+        _ -> nil
+      end
+
+    if connected?(socket), do: spotify_session().subscribe(session_id)
+
+    socket
+    |> assign(@initial_state)
+    |> assign(:static_changed, static_changed?(socket))
+    |> assign_new(:device_name, &generate_device_name/0)
+    |> assign(
+      session_id: session_id,
+      user: user,
+      premium?: ready? && User.premium?(user),
+      now_playing: player,
+      devices: devices,
+      player_token: token,
+      session_ready?: ready?,
+      pending_route: nil,
+      page_title: "Spotify"
+    )
+  end
+
   @impl true
+  def handle_params(params, url, %{assigns: %{session_ready?: false}} = socket) do
+    {:noreply, assign(socket, :pending_route, {params, url})}
+  end
+
   def handle_params(params, url, socket) do
     socket = assign(socket, :panel, nil)
 
@@ -205,8 +232,7 @@ defmodule TuneWeb.ExplorerLive do
 
   def handle_event("toggle_play_pause", %{"key" => " "}, socket) do
     spotify_session().toggle_play(socket.assigns.session_id)
-
-    {:noreply, socket}
+    |> handle_spotify_session_result(socket)
   end
 
   def handle_event("toggle_play_pause", %{"key" => _}, socket) do
@@ -368,6 +394,19 @@ defmodule TuneWeb.ExplorerLive do
         {:noreply, assign(socket, :now_playing, player)}
     end
   end
+
+  def handle_info({:session_ready, user}, socket) do
+    socket = if socket.assigns.session_ready?, do: socket, else: clear_flash(socket, :error)
+    socket = assign(socket, user: user, premium?: User.premium?(user), session_ready?: true)
+
+    case socket.assigns.pending_route do
+      {params, url} -> handle_params(params, url, assign(socket, :pending_route, nil))
+      nil -> {:noreply, socket}
+    end
+  end
+
+  def handle_info({:session_error, reason}, socket),
+    do: handle_spotify_session_result({:error, reason}, socket)
 
   def handle_info({:player_token, token}, socket) do
     {:noreply, assign(socket, :player_token, token)}
@@ -669,6 +708,22 @@ defmodule TuneWeb.ExplorerLive do
   defp parse_album_group("compilation"), do: :compilation
 
   defp handle_spotify_session_result(:ok, socket), do: {:noreply, socket}
+
+  defp handle_spotify_session_result({:error, reason}, socket)
+       when reason in [:not_authenticated, :invalid_token, :invalid_refresh_token, :expired_token] do
+    {:noreply, redirect(socket, to: "/auth/logout")}
+  end
+
+  defp handle_spotify_session_result({:error, {kind, seconds}}, socket)
+       when kind in [:rate_limited, :quota_exceeded] do
+    message =
+      if kind == :quota_exceeded,
+        do:
+          "Spotify's API quota is exhausted. Requests are paused. Try again in #{seconds} seconds.",
+        else: "Spotify is receiving too many requests. Try again in #{seconds} seconds."
+
+    {:noreply, put_flash(socket, :error, message)}
+  end
 
   defp handle_spotify_session_result({:error, 404}, socket) do
     {:noreply, put_flash(socket, :error, gettext("No available devices"))}

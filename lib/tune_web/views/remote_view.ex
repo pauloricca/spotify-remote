@@ -44,6 +44,13 @@ defmodule TuneWeb.RemoteView do
   end
 
   def error_message(403), do: "Reconnect Spotify to allow access to your library."
+
+  def error_message({:quota_exceeded, seconds}),
+    do: "Spotify's API quota is exhausted. Try again in #{seconds} seconds."
+
+  def error_message({:rate_limited, seconds}),
+    do: "Spotify is receiving too many requests. Try again in #{seconds} seconds."
+
   def error_message(429), do: "Spotify is receiving too many requests. Please try again shortly."
   def error_message(_), do: "Spotify is unavailable right now. Please try again."
 end

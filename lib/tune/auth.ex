@@ -10,7 +10,17 @@ defmodule Tune.Auth do
   def load_user(%{"spotify_id" => session_id, "spotify_credentials" => credentials}) do
     case spotify_session().setup(session_id, credentials) do
       :ok ->
-        {:authenticated, session_id, spotify_session().get_profile(session_id)}
+        case spotify_session().get_profile(session_id) do
+          %User{} = user ->
+            {:authenticated, session_id, user}
+
+          {:error, reason}
+          when reason in [:not_authenticated, :invalid_token, :invalid_refresh_token] ->
+            {:error, :not_authenticated}
+
+          {:error, reason} ->
+            {:unavailable, session_id, reason}
+        end
 
       error ->
         error

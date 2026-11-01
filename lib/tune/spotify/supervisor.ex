@@ -31,6 +31,15 @@ defmodule Tune.Spotify.Supervisor do
     )
   end
 
+  # A fresh OAuth callback must replace a failed session or an old scope grant.
+  # Ordinary page loads keep the existing process and its refreshed token.
+  def reset_session(id) do
+    case Registry.lookup(Tune.Spotify.SessionRegistry, id) do
+      [{pid, _}] -> DynamicSupervisor.terminate_child(Tune.Spotify.SessionSupervisor, pid)
+      [] -> :ok
+    end
+  end
+
   def count_sessions do
     count = DynamicSupervisor.count_children(Tune.Spotify.SessionSupervisor)
     :telemetry.execute([:tune, :session, :count], count)

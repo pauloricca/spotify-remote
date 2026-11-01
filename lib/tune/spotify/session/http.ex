@@ -1,137 +1,32 @@
 defmodule Tune.Spotify.Session.HTTP do
   @moduledoc """
-  This module implements a state machine mapped to a user session, wrapping
-  interaction with the Spotify API.
-
-  ## General structure
-
-  The state machine implements the `Tune.Spotify.Session` behaviour for its public API
-  and uses `GenStateMachine` to model its lifecycle.
-
-  If you're not familiar with the `gen_statem` behaviour (which powers
-  `GenStateMachine`), it's beneficial to read
-  <http://erlang.org/doc/design_principles/statem.html> before proceeding
-  further.
-
-  The state machine uses the `handle_event_function` callback mode and has 3
-  states: `:not_authenticated`, `:authenticated` and `:expired`.
-
-  ```
-                                ┌─────────────────┐
-                                │Not authenticated│
-                                └─────────────────┘
-                                         │
-                                         │
-                                         ▼
-                               ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─
-                      ┌────────    Authenticate   │─────────┐
-                      │        └ ─ ─ ─ ─ ─ ─ ─ ─ ─          │
-                      │                  │                  │
-                  Success             Token             Invalid
-                      │              expired             token
-                      │                  │                  │
-                      │                  │                  │
-                      ▼                  ▼                  ▼
-               ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-               │Authenticated│    │   Expired   │    │    Stop     │
-               └─────────────┘    └─────────────┘    └─────────────┘
-                      ▲                  │                  ▲
-                      │              Get new                │
-                  Success             token                 │
-                      │    ┌ ─ ─ ─ ─     │                  │
-                      └──── Refresh │◀───┘                  │
-                           └ ─ ─ ─ ─                        │
-                                │                           │
-                                │          Invalid          │
-                                └──────────refresh ─────────┘
-                                            token
-  ```
-
-  When the process starts, it tries to authenticate against the Spotify API
-  using the provided credentials. If successful, it enters the authenticated
-  state, where all API functions can be executed correctly.
-
-  If authentication fails because the authentication token has expired, the
-  process tries to get a new token using the refresh token supplied by the
-  Spotify API. This process effectively extends the duration of the session.
-
-  Any error that indicates that credentials are invalid causes the process to
-  stop. Any transient network error automatically triggers a delayed retry,
-  which guarantees that _eventually_ the state machine reaches the
-  authenticated state.
-
-  ## Data lifecycle
-
-  Aside from acting as an API client for on-demand operations (e.g. search,
-  play/pause, etc.), the state machine also regularly polls the Spotify API for
-  current player status and connected devices. Both pieces of information are
-  kept in the state machine data for fast read and corresponding events are
-  broadcasted when they change.
-
-  Automatic data fetch is performed after successful authentication (via an
-  `internal` event) and then scheduled via a `state_timeout` event. Once
-  handled, the scheduled event requeues itself via the same `state_timeout` events.
-
-  Usage of `state_timeout` events complies with the general state machine: if
-  at any point the machine enters the expired state, any queued `state_timeout`
-  event is automatically expired.
-
-  Automatic fetching will resume once the machine enters the authenticated state.
-
-  ## Subscriptions
-
-  Multiple processes are able to subscribe to the events keyed by the session id.
-
-  Broadcast and subscribe are implemented via `Phoenix.PubSub`, however the
-  state machine maintains its own set of monitored processes subscribed to the session
-  id.
-
-  Subscription tracking is necessary to implementing automatic termination of a
-  state machine after a period of inactivity. Without that, the state machine would
-  indefinitely poll the Spotify API, even when no client is interested into the
-  topic, until a crash error or a node reboot.
-
-  Every 30 seconds, the state machine fires a named `timeout` event, checking if
-  there's any subscribed process. If not, it terminates. Subscribed processes
-  are monitored, so when they terminate, their exit is handled by the state machine,
-  which removes them from its data.
-
-  Usage of named `timeout` events is necessary, as they're guaranteed to fire
-  irrespectively of state changes.
+  One session process per Spotify user. Serializes token refresh and commands,
+  caches reads, and polls only while a browser is subscribed. Network failures
+  back off; quota failures use the app-wide transport cooldown.
   """
-
-  use GenStateMachine, restart: :transient
+  use GenServer, restart: :temporary
   @behaviour Tune.Spotify.Session
 
   alias Tune.Spotify.{Schema, Session, SessionRegistry}
   alias Phoenix.PubSub
 
-  @default_timeouts %{
-    refresh: 1000,
-    retry: 5000,
-    inactivity: 30_000
-  }
+  @default_timeouts %{refresh: 10_000, devices: 60_000, retry: 5_000, inactivity: 30_000}
+  defstruct [
+    :session_id,
+    :credentials,
+    :user,
+    :error,
+    :poll_timer,
+    :device_timer,
+    now_playing: %Schema.Player{},
+    devices: [],
+    subscribers: MapSet.new(),
+    failures: 0,
+    cache: %{},
+    timeouts: @default_timeouts
+  ]
 
-  defstruct session_id: nil,
-            credentials: nil,
-            user: nil,
-            now_playing: %Schema.Player{},
-            devices: [],
-            subscribers: MapSet.new(),
-            timeouts: @default_timeouts
-
-  @type timeouts :: %{
-          refresh: timeout(),
-          retry: timeout(),
-          inactivity: timeout()
-        }
-  @type start_opts :: [
-          {:timeouts, timeouts()}
-        ]
-
-  ################################################################################
-  ################################## PUBLIC API ##################################
-  ################################################################################
+  @type start_opts :: keyword()
 
   @spec start_link({Session.id(), Session.credentials()}) ::
           {:ok, pid()} | {:error, term()}
@@ -146,9 +41,7 @@ defmodule Tune.Spotify.Session.HTTP do
   @spec start_link(Session.id(), Session.credentials(), start_opts()) ::
           {:ok, pid()} | {:error, term()}
   def start_link(session_id, credentials, start_opts) do
-    GenStateMachine.start_link(__MODULE__, {session_id, credentials, start_opts},
-      name: via(session_id)
-    )
+    GenServer.start_link(__MODULE__, {session_id, credentials, start_opts}, name: via(session_id))
   end
 
   @impl true
@@ -160,12 +53,12 @@ defmodule Tune.Spotify.Session.HTTP do
   def subscribe(session_id) do
     PubSub.subscribe(Tune.PubSub, session_id)
     caller = self()
-    GenStateMachine.call(via(session_id), {:subscribe, caller})
+    call(session_id, {:subscribe, caller})
   end
 
   @impl true
   def subscribers_count(session_id) do
-    GenStateMachine.call(via(session_id), :subscribers_count)
+    call(session_id, :subscribers_count)
   end
 
   @impl true
@@ -175,713 +68,405 @@ defmodule Tune.Spotify.Session.HTTP do
 
   @impl true
   def get_profile(session_id) do
-    GenStateMachine.call(via(session_id), :get_profile)
+    call(session_id, :get_profile)
   end
 
   @impl true
   def now_playing(session_id) do
-    GenStateMachine.call(via(session_id), :now_playing)
+    call(session_id, :now_playing)
   end
 
   @impl true
   def toggle_play(session_id) do
-    GenStateMachine.call(via(session_id), :toggle_play)
+    call(session_id, :toggle_play)
   end
 
   @impl true
   def play(session_id, uri) do
-    GenStateMachine.call(via(session_id), {:play, uri})
+    call(session_id, {:play, uri})
   end
 
   @impl true
   def play(session_id, uri, context_uri) do
-    GenStateMachine.call(via(session_id), {:play, uri, context_uri})
+    call(session_id, {:play, uri, context_uri})
   end
 
   @impl true
   def next(session_id) do
-    GenStateMachine.call(via(session_id), :next)
+    call(session_id, :next)
   end
 
   @impl true
   def prev(session_id) do
-    GenStateMachine.call(via(session_id), :prev)
+    call(session_id, :prev)
   end
 
   @impl true
   def recently_played_tracks(session_id, opts) do
-    GenStateMachine.call(via(session_id), {:recently_played_tracks, opts})
+    call(session_id, {:recently_played_tracks, opts})
   end
 
   @impl true
   def seek(session_id, position_ms) do
-    GenStateMachine.call(via(session_id), {:seek, position_ms})
+    call(session_id, {:seek, position_ms})
   end
 
   @impl true
   def search(session_id, q, opts) do
-    GenStateMachine.call(via(session_id), {:search, q, opts})
+    call(session_id, {:search, q, opts})
   end
 
   @impl true
   def top_tracks(session_id, opts) do
-    GenStateMachine.call(via(session_id), {:top_tracks, opts})
+    call(session_id, {:top_tracks, opts})
   end
 
   @impl true
   def get_album(session_id, album_id) do
-    GenStateMachine.call(via(session_id), {:get_album, album_id})
+    call(session_id, {:get_album, album_id})
   end
 
   @impl true
   def get_artist(session_id, artist_id) do
-    GenStateMachine.call(via(session_id), {:get_artist, artist_id})
+    call(session_id, {:get_artist, artist_id})
   end
 
   @impl true
   def get_artist_albums(session_id, artist_id, opts) do
-    GenStateMachine.call(via(session_id), {:get_artist_albums, artist_id, opts})
+    call(session_id, {:get_artist_albums, artist_id, opts})
   end
 
   @impl true
   def get_show(session_id, show_id) do
-    GenStateMachine.call(via(session_id), {:get_show, show_id})
+    call(session_id, {:get_show, show_id})
   end
 
   @impl true
   def get_episode(session_id, episode_id) do
-    GenStateMachine.call(via(session_id), {:get_episode, episode_id})
+    call(session_id, {:get_episode, episode_id})
   end
 
   @impl true
   def get_episodes(session_id, show_id) do
-    GenStateMachine.call(via(session_id), {:get_episodes, show_id})
+    call(session_id, {:get_episodes, show_id})
   end
 
   @impl true
   def get_playlist(session_id, playlist_id) do
-    GenStateMachine.call(via(session_id), {:get_playlist, playlist_id})
+    call(session_id, {:get_playlist, playlist_id})
   end
 
   @impl true
   def get_devices(session_id) do
-    GenStateMachine.call(via(session_id), :get_devices)
+    call(session_id, :get_devices)
   end
 
   @impl true
   def refresh_devices(session_id) do
-    GenStateMachine.call(via(session_id), :refresh_devices)
+    call(session_id, :refresh_devices)
   end
 
   @impl true
   def get_recommendations_from_artists(session_id, artist_ids) do
-    GenStateMachine.call(via(session_id), {:get_recommendations_from_artists, artist_ids})
+    call(session_id, {:get_recommendations_from_artists, artist_ids})
   end
 
   @impl true
   def transfer_playback(session_id, device_id) do
-    GenStateMachine.call(via(session_id), {:transfer_playback, device_id})
+    call(session_id, {:transfer_playback, device_id})
   end
 
   @impl true
   def set_volume(session_id, volume_percent) do
-    GenStateMachine.call(via(session_id), {:set_volume, volume_percent})
+    call(session_id, {:set_volume, volume_percent})
   end
 
   @impl true
   def library(session_id, kind, opts) do
-    GenStateMachine.call(via(session_id), {:library, kind, opts})
+    call(session_id, {:library, kind, opts})
   end
 
   @impl true
   def queue(session_id) do
-    GenStateMachine.call(via(session_id), :queue)
+    call(session_id, :queue)
   end
 
   @impl true
   def saved_items(session_id, uris) do
-    GenStateMachine.call(via(session_id), {:saved_items, uris})
+    call(session_id, {:saved_items, uris})
   end
 
   @impl true
   def set_saved(session_id, uri, saved) do
-    GenStateMachine.call(via(session_id), {:set_saved, uri, saved})
+    call(session_id, {:set_saved, uri, saved})
   end
 
   @impl true
   def set_shuffle(session_id, enabled) do
-    GenStateMachine.call(via(session_id), {:set_shuffle, enabled})
+    call(session_id, {:set_shuffle, enabled})
   end
 
   @impl true
   def set_repeat(session_id, mode) do
-    GenStateMachine.call(via(session_id), {:set_repeat, mode})
+    call(session_id, {:set_repeat, mode})
   end
 
   @impl true
   def get_player_token(session_id) do
-    GenStateMachine.call(via(session_id), :get_player_token)
+    call(session_id, :get_player_token)
   end
 
-  ################################################################################
-  ################################## CALLBACKS ###################################
-  ################################################################################
-
-  @doc false
   @impl true
-  def init({session_id, credentials, start_opts}) do
-    timeouts = Keyword.get(start_opts, :timeouts, @default_timeouts)
-    data = %__MODULE__{session_id: session_id, credentials: credentials, timeouts: timeouts}
-    action = {:next_event, :internal, :authenticate}
-    {:ok, :not_authenticated, data, action}
+  def init({id, credentials, opts}) do
+    timeouts = Keyword.get(opts, :timeouts, @default_timeouts)
+    # Tests and callers can provide a single refresh interval for both resources.
+    timeouts = Map.put_new(timeouts, :devices, timeouts.refresh)
+    Process.send_after(self(), :inactivity, timeouts.inactivity)
+
+    {:ok,
+     %__MODULE__{
+       session_id: id,
+       credentials: credentials,
+       timeouts: timeouts
+     }, {:continue, :authenticate}}
   end
 
-  @doc false
   @impl true
-  def handle_event(event_type, :authenticate, :not_authenticated, data)
-      when event_type in [:internal, :state_timeout] do
-    case spotify_client().get_profile(data.credentials.token) do
-      {:ok, user} ->
-        data = %{data | user: user}
+  def handle_continue(:authenticate, data), do: {:noreply, authenticate(data)}
 
-        broadcast(data.session_id, {:player_token, data.credentials.token})
+  @impl true
+  def handle_call({:subscribe, pid}, _from, data) do
+    unless MapSet.member?(data.subscribers, pid), do: Process.monitor(pid)
+    if data.user, do: send(pid, {:session_ready, data.user})
+    send(pid, {:player_token, if(data.user, do: data.credentials.token)})
+    send(pid, {:now_playing, data.now_playing})
+    send(pid, {:devices, data.devices})
+    {:reply, :ok, %{data | subscribers: MapSet.put(data.subscribers, pid)}}
+  end
 
-        actions = [
-          {:next_event, :internal, :get_now_playing},
-          {:next_event, :internal, :get_devices},
-          {:state_timeout, data.timeouts.refresh, :refresh_data},
-          {{:timeout, :inactivity}, data.timeouts.inactivity, :expired}
-        ]
+  def handle_call(:subscribers_count, _from, data),
+    do: {:reply, MapSet.size(data.subscribers), data}
 
-        {:next_state, :authenticated, data, actions}
+  def handle_call(:get_profile, _from, data),
+    do: {:reply, data.user || {:error, data.error || :not_authenticated}, data}
 
-      {:error, :invalid_token} ->
-        {:stop, :invalid_token}
+  def handle_call(:now_playing, _from, data), do: {:reply, data.now_playing, data}
+  def handle_call(:get_devices, _from, data), do: {:reply, data.devices, data}
 
-      {:error, :expired_token} ->
-        action = {:next_event, :internal, :refresh}
-        {:next_state, :expired, data, action}
+  def handle_call(:get_player_token, _from, %{user: nil} = data),
+    do: {:reply, {:error, data.error || :not_authenticated}, data}
 
-      # abnormal http error, retry in 5 seconds
-      {:error, _reason} ->
-        action = {:state_timeout, data.timeouts.retry, :authenticate}
-        {:keep_state_and_data, action}
+  def handle_call(:get_player_token, _from, data),
+    do: {:reply, {:ok, data.credentials.token}, data}
+
+  def handle_call(_msg, _from, %{user: nil} = data),
+    do: {:reply, {:error, data.error || :not_authenticated}, data}
+
+  def handle_call(:refresh_devices, _from, data) do
+    {result, data} = fetch(:get_devices, :devices, data)
+    {:reply, result, data}
+  end
+
+  def handle_call(:toggle_play, _from, data) do
+    case data.now_playing.status do
+      :playing -> command(:pause, [], data)
+      :paused -> command(:play, [], data)
+      _ -> {:reply, :ok, data}
     end
   end
 
-  def handle_event(event_type, :refresh, :expired, data)
-      when event_type in [:internal, :state_timeout] do
-    case spotify_client().get_token(data.credentials.refresh_token) do
-      {:ok, new_credentials} ->
-        data = %{data | credentials: new_credentials}
-        action = {:next_event, :internal, :authenticate}
-        {:next_state, :not_authenticated, data, action}
+  def handle_call(message, _from, data) do
+    [fun | args] = if is_tuple(message), do: Tuple.to_list(message), else: [message]
 
-      {:error, status} when is_integer(status) ->
-        {:stop, :invalid_refresh_token}
-
-      # abnormal http error, retry in 5 seconds
-      {:error, _reason} ->
-        action = {:state_timeout, data.timeouts.retry, :refresh}
-        {:keep_state_and_data, action}
-    end
-  end
-
-  def handle_event(:internal, :get_now_playing, :authenticated, data) do
-    case spotify_client().now_playing(data.credentials.token) do
-      {:error, :invalid_token} ->
-        {:stop, :invalid_token}
-
-      {:error, :expired_token} ->
-        action = {:next_event, :internal, :refresh}
-        {:next_state, :expired, data, action}
-
-      # abnormal http error, retry in 5 seconds
-      {:error, _reason} ->
-        action = {:state_timeout, data.timeouts.retry, :get_now_playing}
-        {:keep_state_and_data, action}
-
-      {:ok, now_playing} ->
-        if data.now_playing !== now_playing do
-          broadcast(data.session_id, {:now_playing, now_playing})
-        end
-
-        data = %{data | now_playing: now_playing}
-
-        {:keep_state, data}
-    end
-  end
-
-  def handle_event(:internal, :get_devices, :authenticated, data) do
-    case spotify_client().get_devices(data.credentials.token) do
-      {:error, :invalid_token} ->
-        {:stop, :invalid_token}
-
-      {:error, :expired_token} ->
-        action = {:next_event, :internal, :refresh}
-        {:next_state, :expired, data, action}
-
-      # abnormal http error, retry in 5 seconds
-      {:error, _reason} ->
-        action = {:state_timeout, data.timeouts.retry, :get_devices}
-        {:keep_state_and_data, action}
-
-      {:ok, devices} ->
-        if data.devices !== devices do
-          broadcast(data.session_id, {:devices, devices})
-        end
-
-        data = %{data | devices: devices}
-
-        {:keep_state, data}
-    end
-  end
-
-  def handle_event(:state_timeout, :refresh_data, :authenticated, data) do
-    with {:ok, now_playing} <- spotify_client().now_playing(data.credentials.token),
-         {:ok, devices} <- spotify_client().get_devices(data.credentials.token) do
-      if data.now_playing !== now_playing do
-        broadcast(data.session_id, {:now_playing, now_playing})
-      end
-
-      if data.devices !== devices do
-        broadcast(data.session_id, {:devices, devices})
-      end
-
-      data = %{data | now_playing: now_playing, devices: devices}
-
-      action = {:state_timeout, data.timeouts.refresh, :refresh_data}
-
-      {:keep_state, data, action}
+    if fun in [
+         :play,
+         :next,
+         :prev,
+         :seek,
+         :set_volume,
+         :transfer_playback,
+         :set_shuffle,
+         :set_repeat,
+         :set_saved
+       ] do
+      command(fun, args, data)
     else
-      {:error, :invalid_token} ->
-        {:stop, :invalid_token}
+      key = {fun, args}
 
-      {:error, :expired_token} ->
-        action = {:next_event, :internal, :refresh}
-        {:next_state, :expired, data, action}
+      case Map.get(data.cache, key) do
+        {until, result} ->
+          if until > now(), do: {:reply, result, data}, else: read(fun, args, key, data)
 
-      # abnormal http error, retry in 5 seconds
-      {:error, _reason} ->
-        action = {:state_timeout, data.timeouts.retry, :refresh_data}
-        {:keep_state_and_data, action}
+        _ ->
+          read(fun, args, key, data)
+      end
     end
   end
 
-  def handle_event({:call, from}, {:subscribe, pid}, _state, data) do
-    new_subscribers = MapSet.put(data.subscribers, pid)
-    Process.monitor(pid)
-    action = {:reply, from, :ok}
-    {:keep_state, %{data | subscribers: new_subscribers}, action}
+  @impl true
+  def handle_info(:authenticate, data), do: {:noreply, authenticate(data)}
+
+  def handle_info(:poll, data) do
+    data = %{data | poll_timer: nil}
+
+    {result, data} =
+      if data.user && MapSet.size(data.subscribers) > 0,
+        do: fetch(:now_playing, :now_playing, data),
+        else: {:ok, data}
+
+    {:noreply, schedule_poll(data, delay(result, data))}
   end
 
-  def handle_event({:call, from}, :subscribers_count, _state, data) do
-    action = {:reply, from, MapSet.size(data.subscribers)}
-    {:keep_state_and_data, action}
+  def handle_info(:devices, data) do
+    data = %{data | device_timer: nil}
+
+    {result, data} =
+      if data.user && MapSet.size(data.subscribers) > 0,
+        do: fetch(:get_devices, :devices, data),
+        else: {:ok, data}
+
+    {:noreply, schedule_devices(data, max(data.timeouts.devices, delay(result, data)))}
   end
 
-  def handle_event({:call, from}, msg, :authenticated, data) do
-    handle_authenticated_call(from, msg, data)
-  end
-
-  def handle_event({:call, from}, _request, _state, _data) do
-    action = {:reply, from, {:error, :not_authenticated}}
-    {:keep_state_and_data, action}
-  end
-
-  def handle_event({:timeout, :inactivity}, :expired, _state, data) do
+  def handle_info(:inactivity, data) do
     if MapSet.size(data.subscribers) == 0 do
-      {:stop, :normal}
+      {:stop, :normal, data}
     else
-      action = {{:timeout, :inactivity}, data.timeouts.inactivity, :expired}
-      {:keep_state_and_data, action}
+      Process.send_after(self(), :inactivity, data.timeouts.inactivity)
+      {:noreply, data}
     end
   end
 
-  def handle_event(:info, {:DOWN, _ref, :process, pid, _reason}, _state, data) do
-    new_subscribers = MapSet.delete(data.subscribers, pid)
+  def handle_info({:DOWN, _, :process, pid, _}, data),
+    do: {:noreply, %{data | subscribers: MapSet.delete(data.subscribers, pid)}}
 
-    {:keep_state, %{data | subscribers: new_subscribers}}
-  end
+  defp authenticate(data) do
+    case request(:get_profile, [], data) do
+      {{:ok, user}, data} ->
+        data = %{data | user: user, error: nil, failures: 0}
+        broadcast(data.session_id, {:player_token, data.credentials.token})
+        broadcast(data.session_id, {:session_ready, user})
+        {result, data} = fetch(:now_playing, :now_playing, data)
+        {_, data} = fetch(:get_devices, :devices, data)
+        data |> schedule_poll(delay(result, data)) |> schedule_devices(data.timeouts.devices)
 
-  ################################################################################
-  ########################### INTERNAL IMPLEMENTATION ############################
-  ################################################################################
+      {{:error, reason} = error, data} ->
+        data = %{data | error: reason, failures: data.failures + 1}
 
-  # These on-demand requests use the same token refresh/error handling as playback.
-  defp reply_to_request(from, result, data) do
-    case result do
-      :ok -> {:keep_state_and_data, {:reply, from, :ok}}
-      {:ok, _} -> {:keep_state_and_data, {:reply, from, result}}
-      error -> handle_common_errors(error, data, from)
-    end
-  end
+        unless reason in [:invalid_token, :invalid_refresh_token] do
+          Process.send_after(self(), :authenticate, delay(error, data))
+        end
 
-  defp reply_to_playback_request(from, :ok, _data),
-    do: {:keep_state_and_data, [{:next_event, :internal, :get_now_playing}, {:reply, from, :ok}]}
-
-  defp reply_to_playback_request(from, error, data), do: handle_common_errors(error, data, from)
-
-  defp handle_authenticated_call(from, {:library, kind, opts}, data),
-    do: reply_to_request(from, spotify_client().library(data.credentials.token, kind, opts), data)
-
-  defp handle_authenticated_call(from, :queue, data),
-    do: reply_to_request(from, spotify_client().queue(data.credentials.token), data)
-
-  defp handle_authenticated_call(from, {:saved_items, uris}, data),
-    do: reply_to_request(from, spotify_client().saved_items(data.credentials.token, uris), data)
-
-  defp handle_authenticated_call(from, {:set_saved, uri, saved}, data),
-    do:
-      reply_to_request(from, spotify_client().set_saved(data.credentials.token, uri, saved), data)
-
-  defp handle_authenticated_call(from, {:set_shuffle, enabled}, data),
-    do:
-      reply_to_playback_request(
-        from,
-        spotify_client().set_shuffle(data.credentials.token, enabled),
         data
-      )
+    end
+  end
 
-  defp handle_authenticated_call(from, {:set_repeat, mode}, data),
-    do:
-      reply_to_playback_request(
-        from,
-        spotify_client().set_repeat(data.credentials.token, mode),
+  defp read(fun, args, key, data) do
+    {result, data} = request(fun, args, data)
+    cache = data.cache |> Enum.filter(fn {_, {until, _}} -> until > now() end) |> Map.new()
+    # Keep the cache bounded even when a browser searches many distinct terms.
+    cache = if map_size(cache) >= 100, do: %{}, else: cache
+
+    ttl = if fun == :queue, do: 2_000, else: 30_000
+
+    cache =
+      case result do
+        {:ok, _} -> Map.put(cache, key, {now() + ttl, result})
+        _ -> cache
+      end
+
+    {:reply, result, %{data | cache: cache}}
+  end
+
+  defp command(fun, args, data) do
+    {result, data} = request(fun, args, data)
+    data = if result == :ok, do: %{data | cache: %{}}, else: data
+
+    data =
+      if result == :ok and fun != :set_saved do
+        {_, updated} = fetch(:now_playing, :now_playing, data)
+        updated
+      else
         data
-      )
+      end
 
-  defp handle_authenticated_call(from, :get_profile, data) do
-    action = {:reply, from, data.user}
-    {:keep_state_and_data, action}
+    {:reply, result, data}
   end
 
-  defp handle_authenticated_call(from, :now_playing, data) do
-    action = {:reply, from, data.now_playing}
-    {:keep_state_and_data, action}
-  end
+  defp fetch(fun, field, data) do
+    case request(fun, [], data) do
+      {{:ok, value}, data} ->
+        if Map.fetch!(data, field) != value, do: broadcast(data.session_id, {field, value})
+        {:ok, data |> Map.put(field, value) |> Map.put(:failures, 0)}
 
-  defp handle_authenticated_call(from, :toggle_play, %{now_playing: %{status: :playing}} = data) do
-    case spotify_client().pause(data.credentials.token) do
-      :ok ->
-        actions = [
-          {:next_event, :internal, :get_now_playing},
-          {:reply, from, :ok}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
+      {{:error, reason} = error, data} ->
+        if data.failures == 0, do: broadcast(data.session_id, {:session_error, reason})
+        {error, %{data | failures: data.failures + 1}}
     end
   end
 
-  defp handle_authenticated_call(from, :toggle_play, %{now_playing: %{status: :paused}} = data) do
-    case spotify_client().play(data.credentials.token) do
-      :ok ->
-        actions = [
-          {:next_event, :internal, :get_now_playing},
-          {:reply, from, :ok}
-        ]
+  # Refresh at most once per operation. A failed command is never replayed for
+  # network errors or 5xx responses, as it may already have reached Spotify.
+  defp request(fun, args, data) do
+    result = apply(spotify_client(), fun, [data.credentials.token | args])
 
-        {:keep_state_and_data, actions}
+    if result in [{:error, :expired_token}, {:error, :invalid_token}] do
+      case spotify_client().get_token(data.credentials.refresh_token) do
+        {:ok, credentials} ->
+          credentials = %{
+            credentials
+            | refresh_token: credentials.refresh_token || data.credentials.refresh_token
+          }
 
-      error ->
-        handle_common_errors(error, data, from)
+          data = %{data | credentials: credentials}
+          broadcast(data.session_id, {:player_token, credentials.token})
+          result = apply(spotify_client(), fun, [credentials.token | args])
+          {result, auth_error(result, data)}
+
+        {:error, reason} ->
+          reason = if reason in [400, 401], do: :invalid_refresh_token, else: reason
+          error = {:error, reason}
+          {error, auth_error(error, data)}
+      end
+    else
+      {result, data}
     end
   end
 
-  defp handle_authenticated_call(from, :toggle_play, _data) do
-    action = {:reply, from, :ok}
-    {:keep_state_and_data, action}
+  defp auth_error({:error, reason}, data)
+       when reason in [:invalid_token, :expired_token, :invalid_refresh_token] do
+    broadcast(data.session_id, {:session_error, :not_authenticated})
+    %{data | user: nil, error: :not_authenticated, cache: %{}}
   end
 
-  defp handle_authenticated_call(from, {:search, q, opts}, data) do
-    case spotify_client().search(data.credentials.token, q, opts) do
-      {:ok, results} ->
-        action = {:reply, from, {:ok, results}}
-        {:keep_state_and_data, action}
+  defp auth_error(_, data), do: data
 
-      error ->
-        handle_common_errors(error, data, from)
-    end
+  defp delay({:error, {kind, seconds}}, _data) when kind in [:rate_limited, :quota_exceeded],
+    do: max(seconds * 1000, 1000)
+
+  defp delay({:error, _}, data),
+    do: min(data.timeouts.retry * round(:math.pow(2, min(data.failures, 6))), 300_000)
+
+  defp delay(_, data), do: data.timeouts.refresh
+
+  defp schedule_poll(%{poll_timer: nil} = data, delay),
+    do: %{data | poll_timer: Process.send_after(self(), :poll, delay)}
+
+  defp schedule_poll(data, _), do: data
+
+  defp schedule_devices(%{device_timer: nil} = data, delay),
+    do: %{data | device_timer: Process.send_after(self(), :devices, delay)}
+
+  defp schedule_devices(data, _), do: data
+
+  defp call(id, message) do
+    GenServer.call(via(id), message, 30_000)
+  catch
+    :exit, {:timeout, _} -> {:error, :timeout}
+    :exit, _ -> {:error, :not_authenticated}
   end
 
-  defp handle_authenticated_call(from, {:recently_played_tracks, opts}, data) do
-    case spotify_client().recently_played_tracks(data.credentials.token, opts) do
-      {:ok, tracks} ->
-        action = {:reply, from, {:ok, tracks}}
-        {:keep_state_and_data, action}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:top_tracks, opts}, data) do
-    case spotify_client().top_tracks(data.credentials.token, opts) do
-      {:ok, tracks} ->
-        action = {:reply, from, {:ok, tracks}}
-        {:keep_state_and_data, action}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:play, uri}, data) do
-    case spotify_client().play(data.credentials.token, uri) do
-      :ok ->
-        actions = [
-          {:next_event, :internal, :get_now_playing},
-          {:reply, from, :ok}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:play, uri, context_uri}, data) do
-    case spotify_client().play(data.credentials.token, uri, context_uri) do
-      :ok ->
-        actions = [
-          {:next_event, :internal, :get_now_playing},
-          {:reply, from, :ok}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, :next, data) do
-    case spotify_client().next(data.credentials.token) do
-      :ok ->
-        actions = [
-          {:next_event, :internal, :get_now_playing},
-          {:reply, from, :ok}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, :prev, data) do
-    case spotify_client().prev(data.credentials.token) do
-      :ok ->
-        actions = [
-          {:next_event, :internal, :get_now_playing},
-          {:reply, from, :ok}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:seek, position_ms}, data) do
-    case spotify_client().seek(data.credentials.token, position_ms) do
-      :ok ->
-        actions = [
-          {:next_event, :internal, :get_now_playing},
-          {:reply, from, :ok}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:get_album, album_id}, data) do
-    case spotify_client().get_album(data.credentials.token, album_id) do
-      {:ok, album} ->
-        actions = [
-          {:reply, from, {:ok, album}}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:get_artist, artist_id}, data) do
-    case spotify_client().get_artist(data.credentials.token, artist_id) do
-      {:ok, artist} ->
-        actions = [
-          {:reply, from, {:ok, artist}}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:get_artist_albums, artist_id, opts}, data) do
-    case spotify_client().get_artist_albums(data.credentials.token, artist_id, opts) do
-      {:ok, albums} ->
-        actions = [
-          {:reply, from, {:ok, albums}}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:get_show, show_id}, data) do
-    case spotify_client().get_show(data.credentials.token, show_id) do
-      {:ok, show} ->
-        actions = [
-          {:reply, from, {:ok, show}}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:get_episode, episode_id}, data) do
-    case spotify_client().get_episode(data.credentials.token, episode_id) do
-      {:ok, episode} ->
-        actions = [
-          {:reply, from, {:ok, episode}}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:get_episodes, show_id}, data) do
-    case spotify_client().get_episodes(data.credentials.token, show_id) do
-      {:ok, episodes} ->
-        actions = [
-          {:reply, from, {:ok, episodes}}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:get_playlist, playlist_id}, data) do
-    case spotify_client().get_playlist(data.credentials.token, playlist_id) do
-      {:ok, playlist} ->
-        actions = [
-          {:reply, from, {:ok, playlist}}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, :get_devices, data) do
-    action = {:reply, from, data.devices}
-    {:keep_state_and_data, action}
-  end
-
-  defp handle_authenticated_call(from, :refresh_devices, _data) do
-    actions = [{:next_event, :internal, :get_devices}, {:reply, from, :ok}]
-    {:keep_state_and_data, actions}
-  end
-
-  defp handle_authenticated_call(from, {:get_recommendations_from_artists, artist_ids}, data) do
-    case spotify_client().get_recommendations_from_artists(data.credentials.token, artist_ids) do
-      {:ok, tracks} ->
-        actions = [
-          {:reply, from, {:ok, tracks}}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, :get_player_token, data) do
-    actions = [
-      {:reply, from, {:ok, data.credentials.token}}
-    ]
-
-    {:keep_state_and_data, actions}
-  end
-
-  defp handle_authenticated_call(from, {:transfer_playback, device_id}, data) do
-    case spotify_client().transfer_playback(data.credentials.token, device_id) do
-      :ok ->
-        actions = [
-          {:reply, from, :ok}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_authenticated_call(from, {:set_volume, volume_percent}, data) do
-    case spotify_client().set_volume(data.credentials.token, volume_percent) do
-      :ok ->
-        actions = [
-          {:next_event, :internal, :get_now_playing},
-          {:reply, from, :ok}
-        ]
-
-        {:keep_state_and_data, actions}
-
-      error ->
-        handle_common_errors(error, data, from)
-    end
-  end
-
-  defp handle_common_errors(error, data, from) do
-    case error do
-      {:error, :expired_token} ->
-        action = {:next_event, :internal, :refresh}
-        {:next_state, :expired, data, action}
-
-      {:error, :invalid_token} ->
-        {:stop, :invalid_token}
-
-      # abnormal http error
-      other ->
-        action = {:reply, from, other}
-        {:keep_state_and_data, action}
-    end
-  end
-
-  defp via(session_id) do
-    {:via, Registry, {SessionRegistry, session_id}}
-  end
-
-  defp spotify_client, do: Application.get_env(:tune, :spotify_client)
+  defp now, do: System.monotonic_time(:millisecond)
+  defp via(id), do: {:via, Registry, {SessionRegistry, id}}
+  defp spotify_client, do: Application.fetch_env!(:tune, :spotify_client)
 end

@@ -66,7 +66,7 @@ defmodule Tune.Spotify.Client.HTTP do
     ]
 
     case form_post(
-           @refresh_url,
+           Application.get_env(:tune, :spotify_token_url, @refresh_url),
            %{grant_type: "refresh_token", refresh_token: refresh_token},
            headers
          ) do
@@ -463,13 +463,13 @@ defmodule Tune.Spotify.Client.HTTP do
     params =
       case Keyword.get(opts, :before) do
         nil -> params
-        before_time -> Map.put(params, :before, DateTime.to_unix(before_time))
+        before_time -> Map.put(params, :before, DateTime.to_unix(before_time, :millisecond))
       end
 
     params =
       case Keyword.get(opts, :after) do
         nil -> params
-        before_time -> Map.put(params, :before, DateTime.to_unix(before_time))
+        after_time -> Map.put(params, :after, DateTime.to_unix(after_time, :millisecond))
       end
 
     case json_get(
@@ -610,7 +610,7 @@ defmodule Tune.Spotify.Client.HTTP do
       base_url() <> "/me/library?" <> URI.encode_query(%{uris: uri}),
       auth_headers(token)
     )
-    |> Finch.request(Tune.Finch)
+    |> Tune.Spotify.Transport.request()
     |> mutation_result()
   end
 
@@ -666,22 +666,22 @@ defmodule Tune.Spotify.Client.HTTP do
 
   defp get(url, headers) do
     Finch.build(:get, url, headers)
-    |> Finch.request(Tune.Finch)
+    |> Tune.Spotify.Transport.request()
   end
 
   defp post(url, body, headers) do
     Finch.build(:post, url, headers, body)
-    |> Finch.request(Tune.Finch)
+    |> Tune.Spotify.Transport.request()
   end
 
   defp put(url, body, headers) do
     Finch.build(:put, url, headers, body)
-    |> Finch.request(Tune.Finch)
+    |> Tune.Spotify.Transport.request()
   end
 
   defp parse_profile(data) do
     %User{
-      name: Map.get(data, "display_name"),
+      name: Map.get(data, "display_name") || Map.get(data, "id") || "Spotify",
       avatar_url: get_in(data, ["images", Access.at(0), "url"]),
       product: Map.get(data, "product")
     }
@@ -732,7 +732,7 @@ defmodule Tune.Spotify.Client.HTTP do
 
   defp track_connection_error(reason) do
     Logger.warn(fn ->
-      "Spotify HTTP Api connection error: #{reason}"
+      "Spotify HTTP Api connection error: #{inspect(reason)}"
     end)
 
     :telemetry.execute([:tune, :spotify, :api_error], %{count: 1}, %{
@@ -744,15 +744,20 @@ defmodule Tune.Spotify.Client.HTTP do
     %Credentials{
       expires: true,
       expires_at: OAuth2.Util.unix_now() + data["expires_in"],
-      refresh_token: refresh_token,
+      refresh_token: data["refresh_token"] || refresh_token,
       scopes: [data["scope"]],
       token: data["access_token"],
       token_type: data["token_type"]
     }
   end
 
+  defp parse_now_playing(%{"item" => nil}), do: %Player{}
+
   defp parse_now_playing(data) do
     case Map.get(data, "currently_playing_type") do
+      nil ->
+        %Player{}
+
       # this appears when queueing a new album/show
       "unknown" ->
         %Player{}
@@ -952,6 +957,8 @@ defmodule Tune.Spotify.Client.HTTP do
     }
   end
 
+  defp parse_show(nil), do: :not_fetched
+
   defp parse_show(item) do
     %Show{
       id: Map.get(item, "id"),
@@ -1079,6 +1086,8 @@ defmodule Tune.Spotify.Client.HTTP do
         end
     }
   end
+
+  defp parse_device(nil), do: nil
 
   defp parse_device(device) do
     %Device{

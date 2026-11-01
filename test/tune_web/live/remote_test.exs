@@ -167,4 +167,33 @@ defmodule TuneWeb.RemoteTest do
     assert has_element?(view, ".search-columns .song-row", "Let It Happen")
     assert has_element?(view, "a[href='/playlists/playlist1']")
   end
+
+  test "quota failure during mount renders the existing page and recovers", %{conn: conn} do
+    stub(Mock, :get_profile, fn _ -> {:error, {:quota_exceeded, 3600}} end)
+    stub(Mock, :get_player_token, fn _ -> {:error, :not_authenticated} end)
+    stub(Mock, :now_playing, fn _ -> {:error, :not_authenticated} end)
+    stub(Mock, :get_devices, fn _ -> {:error, :not_authenticated} end)
+    {:ok, view, html} = live(conn, "/library")
+    assert html =~ "quota is exhausted"
+    assert has_element?(view, ".sidebar")
+
+    expect(Mock, :library, fn _, :playlists, _ ->
+      {:ok, %{items: [F.playlist()], total: 1, next: nil}}
+    end)
+
+    send(view.pid, {:session_ready, F.user()})
+    assert render(view) =~ "Chilled Vibes"
+  end
+
+  test "invalid credentials redirect to sign-in without an HTTP 500", %{conn: conn} do
+    stub(Mock, :get_profile, fn _ -> {:error, :not_authenticated} end)
+    assert {:error, {:redirect, %{to: "/auth/login"}}} = live(conn, "/library")
+  end
+
+  test "a playback authentication failure redirects instead of crashing", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/now-playing")
+    expect(Mock, :next, fn _ -> {:error, :not_authenticated} end)
+    view |> element("button[phx-click=next]") |> render_click()
+    assert_redirect(view, "/auth/logout")
+  end
 end

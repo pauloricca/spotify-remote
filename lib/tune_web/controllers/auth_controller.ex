@@ -60,6 +60,8 @@ defmodule TuneWeb.AuthController do
         put_flash(conn, :warning, message)
       end
 
+    Tune.Spotify.Supervisor.reset_session(auth.info.nickname)
+
     conn
     |> put_session(:spotify_credentials, auth.credentials)
     |> put_session(:spotify_id, auth.info.nickname)
@@ -98,7 +100,13 @@ defmodule TuneWeb.AuthController do
         |> assign(:release_radar_playlist_id, get_release_radar_playlist_id())
         |> assign(:session_id, session_id)
 
-      {:error, :not_authenticated} ->
+      {:unavailable, session_id, _reason} ->
+        conn
+        |> assign(:status, :authenticated)
+        |> assign(:user, %Tune.Spotify.Schema.User{name: "Spotify", avatar_url: nil, product: nil})
+        |> assign(:session_id, session_id)
+
+      _ ->
         conn
         |> assign(:status, :not_authenticated)
         |> Phoenix.Controller.redirect(to: Routes.auth_path(conn, :new))

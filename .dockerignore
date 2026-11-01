@@ -8,3 +8,6 @@ erl_crash.dump
 
 .env
 .env.*
+/cover
+/doc
+/priv/plts

@@ -17,6 +17,7 @@ defmodule Tune.Application do
       TuneWeb.Endpoint,
       # Start a worker by calling: Tune.Worker.start_link(arg)
       {Finch, name: Tune.Finch},
+      Tune.Spotify.Transport,
       Tune.Spotify.Supervisor,
       # Start the Telemetry supervisor
       TuneWeb.Telemetry,

@@ -5,7 +5,7 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest.Server do
 
   def call(conn, agent) do
     conn = fetch_query_params(conn)
-    {owner, status, body} = Agent.get(agent, & &1)
+    {owner, status, body, headers} = Agent.get(agent, & &1)
 
     send(
       owner,
@@ -13,9 +13,19 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest.Server do
        get_req_header(conn, "authorization")}
     )
 
+    conn =
+      Enum.reduce(headers, conn, fn {key, value}, conn -> put_resp_header(conn, key, value) end)
+
     conn
     |> put_resp_content_type("application/json")
-    |> send_resp(status, if(status == 204, do: "", else: Jason.encode!(body)))
+    |> send_resp(
+      status,
+      case {status, body} do
+        {204, _} -> ""
+        {_, {:raw, raw}} -> raw
+        _ -> Jason.encode!(body)
+      end
+    )
   end
 end
 
@@ -26,7 +36,7 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest do
 
   setup do
     owner = self()
-    agent = start_supervised!({Agent, fn -> {owner, 200, %{}} end})
+    agent = start_supervised!({Agent, fn -> {owner, 200, %{}, []} end})
     ref = make_ref()
 
     start_supervised!(
@@ -37,6 +47,8 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest do
       )
     )
 
+    :sys.replace_state(Tune.Spotify.Transport, fn _ -> %{until: nil, kind: nil} end)
+
     previous = Application.get_env(:tune, :spotify_api_base_url)
 
     Application.put_env(
@@ -46,6 +58,8 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest do
     )
 
     on_exit(fn ->
+      :sys.replace_state(Tune.Spotify.Transport, fn _ -> %{until: nil, kind: nil} end)
+
       if previous,
         do: Application.put_env(:tune, :spotify_api_base_url, previous),
         else: Application.delete_env(:tune, :spotify_api_base_url)
@@ -55,7 +69,7 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest do
   end
 
   defp respond(agent, body, status \\ 200),
-    do: Agent.update(agent, fn {owner, _, _} -> {owner, status, body} end)
+    do: Agent.update(agent, fn {owner, _, _, headers} -> {owner, status, body, headers} end)
 
   defp album_json,
     do: %{
@@ -186,5 +200,87 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest do
   test "missing permission is returned for an actionable library error", %{agent: agent} do
     respond(agent, %{error: %{message: "Insufficient scope"}}, 403)
     assert {:error, 403} = HTTP.library("token", :playlists, [])
+  end
+
+  @tag capture_log: true
+  test "429 pauses all tokens and endpoints for Retry-After", %{agent: agent} do
+    Agent.update(agent, fn {owner, _, _, _} ->
+      {owner, 429, %{error: %{reason: "RATE_LIMITED"}}, [{"retry-after", "120"}]}
+    end)
+
+    assert {:error, {:rate_limited, 120}} = HTTP.get_profile("first-token")
+    assert_receive {:spotify_request, "GET", "/v1/me", _, _}
+    respond(agent, %{items: [], total: 0})
+    assert {:error, {:rate_limited, seconds}} = HTTP.library("another-token", :albums, [])
+    assert seconds in 119..120
+    refute_receive {:spotify_request, _, _, _, _}
+  end
+
+  @tag capture_log: true
+  test "quota exhaustion without Retry-After pauses for an hour", %{agent: agent} do
+    respond(agent, %{error: %{reason: "QUOTA_EXCEEDED"}}, 429)
+    assert {:error, {:quota_exceeded, 3600}} = HTTP.get_profile("token")
+    assert_receive {:spotify_request, _, _, _, _}
+    assert {:error, {:quota_exceeded, _}} = HTTP.now_playing("other-token")
+    refute_receive {:spotify_request, _, _, _, _}
+  end
+
+  test "expired cooldown permits a new request", %{agent: agent} do
+    :sys.replace_state(Tune.Spotify.Transport, fn _ ->
+      %{until: System.monotonic_time(:millisecond) - 1, kind: :rate_limited}
+    end)
+
+    respond(agent, %{}, 204)
+    assert {:ok, _} = HTTP.now_playing("token")
+    assert_receive {:spotify_request, _, _, _, _}
+  end
+
+  test "missing playable item returns an empty player", %{agent: agent} do
+    respond(agent, %{currently_playing_type: "track", item: nil})
+    assert {:ok, %{status: :not_playing}} = HTTP.now_playing("token")
+  end
+
+  @tag capture_log: true
+  test "malformed successful JSON returns an error without crashing", %{agent: agent} do
+    respond(agent, {:raw, "<html>Proxy error</html>"})
+    assert {:error, :invalid_response} = HTTP.now_playing("token")
+    respond(agent, {:raw, "null"})
+    assert {:error, :invalid_response} = HTTP.get_profile("token")
+  end
+
+  test "recent history uses milliseconds and the correct after cursor", %{agent: agent} do
+    respond(agent, %{items: []})
+    after_time = ~U[2026-01-01 00:00:00Z]
+    assert {:ok, []} = HTTP.recently_played_tracks("token", after: after_time)
+    assert_receive {:spotify_request, "GET", "/v1/me/player/recently-played", params, _}
+    assert params["after"] == to_string(DateTime.to_unix(after_time, :millisecond))
+    refute Map.has_key?(params, "before")
+  end
+
+  test "token refresh keeps the old refresh token unless Spotify rotates it", %{agent: agent} do
+    previous = Application.get_env(:tune, :spotify_token_url)
+    url = Application.fetch_env!(:tune, :spotify_api_base_url) <> "/token"
+    Application.put_env(:tune, :spotify_token_url, url)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:tune, :spotify_token_url, previous),
+        else: Application.delete_env(:tune, :spotify_token_url)
+    end)
+
+    body = %{
+      access_token: "new-access",
+      expires_in: 3600,
+      token_type: "Bearer",
+      scope: "streaming"
+    }
+
+    respond(agent, body)
+
+    assert {:ok, %{token: "new-access", refresh_token: "old-refresh"}} =
+             HTTP.get_token("old-refresh")
+
+    respond(agent, Map.put(body, :refresh_token, "rotated-refresh"))
+    assert {:ok, %{refresh_token: "rotated-refresh"}} = HTTP.get_token("old-refresh")
   end
 end
