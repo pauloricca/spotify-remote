@@ -39,7 +39,7 @@ defmodule TuneWeb.ExplorerLive do
 
   use TuneWeb, :live_view
 
-  alias Tune.Spotify.Schema.{Album, Device, Player, Track, User}
+  alias Tune.Spotify.Schema.{Album, Device, Player, Playlist, Track, User}
 
   alias TuneWeb.{
     AlbumView,
@@ -55,6 +55,7 @@ defmodule TuneWeb.ExplorerLive do
 
   @initial_state [
     panel: nil,
+    playlist_picker: %{item: nil, items: [], next: nil, offset: 0, error: nil, write_error: nil},
     home_playlists: [],
     home_playlists_error: nil,
     queue: %{currently_playing: nil, queue: []},
@@ -191,6 +192,55 @@ defmodule TuneWeb.ExplorerLive do
 
   def handle_event("open_queue", _params, socket),
     do: {:noreply, socket |> assign(:panel, :queue) |> load_queue()}
+
+  def handle_event("open_add_to_playlist", _params, socket) do
+    item = socket.assigns.now_playing.item
+
+    if TuneWeb.RemoteView.playlist_item?(item) do
+      picker = %{item: item, items: [], next: nil, offset: 0, error: nil, write_error: nil}
+
+      {:noreply,
+       socket |> assign(panel: :playlists, playlist_picker: picker) |> load_playlist_choices(0)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("retry_playlist_choices", _params, %{assigns: %{panel: :playlists}} = socket),
+    do: {:noreply, load_playlist_choices(socket, socket.assigns.playlist_picker.offset)}
+
+  def handle_event("retry_playlist_choices", _params, socket), do: {:noreply, socket}
+
+  def handle_event("more_playlist_choices", _params, socket) do
+    case socket.assigns do
+      %{panel: :playlists, playlist_picker: %{next: next}} when is_binary(next) ->
+        params = next |> URI.parse() |> Map.get(:query) |> URI.decode_query()
+        {:noreply, load_playlist_choices(socket, positive_integer(params["offset"], 0))}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("add_to_playlist", %{"playlist" => id}, socket) do
+    picker = socket.assigns.playlist_picker
+    playlist = Enum.find(picker.items, &(&1.id == id))
+
+    if socket.assigns.panel == :playlists and playlist != nil do
+      case spotify_session().add_to_playlist(socket.assigns.session_id, id, picker.item.uri) do
+        :ok ->
+          {:noreply,
+           socket
+           |> assign(:panel, nil)
+           |> put_flash(:info, "Added #{picker.item.name} to #{playlist.name}")}
+
+        {:error, reason} ->
+          {:noreply, assign(socket, :playlist_picker, %{picker | write_error: reason})}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
 
   def handle_event("close_panel", _params, socket), do: {:noreply, assign(socket, :panel, nil)}
 
@@ -477,6 +527,30 @@ defmodule TuneWeb.ExplorerLive do
 
       error ->
         handle_spotify_session_result(error, assign(socket, :item, :not_fetched))
+    end
+  end
+
+  defp load_playlist_choices(socket, offset) do
+    picker = socket.assigns.playlist_picker
+
+    case spotify_session().library(socket.assigns.session_id, :playlists,
+           offset: offset,
+           after: nil
+         ) do
+      {:ok, page} ->
+        editable = Enum.filter(page.items, &Playlist.editable?(&1, socket.assigns.session_id))
+        items = Enum.uniq_by(picker.items ++ editable, & &1.id)
+
+        assign(socket, :playlist_picker, %{
+          picker
+          | items: items,
+            next: page.next,
+            offset: offset,
+            error: nil
+        })
+
+      {:error, reason} ->
+        assign(socket, :playlist_picker, %{picker | offset: offset, error: reason})
     end
   end
 

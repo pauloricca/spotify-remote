@@ -9,7 +9,8 @@ defmodule TuneWeb.AuthTest do
     assert params["scope"] =~ "user-modify-playback-state"
     assert params["scope"] =~ "user-library-read"
     assert params["scope"] =~ "user-library-modify"
-    refute params["scope"] =~ "playlist-modify-public"
+    assert params["scope"] =~ "playlist-modify-public"
+    assert params["scope"] =~ "playlist-modify-private"
     refute params["scope"] =~ ","
     assert byte_size(params["state"]) >= 32
     assert params["state"] == get_session(conn, :spotify_oauth_state)

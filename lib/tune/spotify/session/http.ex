@@ -197,6 +197,10 @@ defmodule Tune.Spotify.Session.HTTP do
   end
 
   @impl true
+  def add_to_playlist(session_id, playlist_id, uri),
+    do: call(session_id, {:add_to_playlist, playlist_id, uri})
+
+  @impl true
   def set_saved(session_id, uri, saved) do
     call(session_id, {:set_saved, uri, saved})
   end
@@ -287,7 +291,8 @@ defmodule Tune.Spotify.Session.HTTP do
          :transfer_playback,
          :set_shuffle,
          :set_repeat,
-         :set_saved
+         :set_saved,
+         :add_to_playlist
        ] do
       command(fun, args, data)
     else
@@ -383,7 +388,7 @@ defmodule Tune.Spotify.Session.HTTP do
     data = if result == :ok, do: %{data | cache: %{}}, else: data
 
     data =
-      if result == :ok and fun != :set_saved do
+      if result == :ok and fun not in [:set_saved, :add_to_playlist] do
         {_, updated} = fetch(:now_playing, :now_playing, data)
         updated
       else

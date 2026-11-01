@@ -615,6 +615,16 @@ defmodule Tune.Spotify.Client.HTTP do
   end
 
   @impl true
+  def add_to_playlist(token, playlist_id, uri) do
+    post(
+      base_url() <> "/playlists/" <> URI.encode_www_form(playlist_id) <> "/items",
+      Jason.encode!(%{uris: [uri]}),
+      @json_headers ++ auth_headers(token)
+    )
+    |> mutation_result()
+  end
+
+  @impl true
   def set_shuffle(token, enabled) when is_boolean(enabled),
     do: playback_setting(token, "shuffle", %{state: enabled})
 
@@ -1034,6 +1044,8 @@ defmodule Tune.Spotify.Client.HTTP do
       name: Map.get(item, "name"),
       spotify_url: parse_spotify_url(item),
       description: Map.get(item, "description"),
+      owner_id: get_in(item, ["owner", "id"]),
+      collaborative: Map.get(item, "collaborative", false) == true,
       thumbnails:
         item
         |> Map.get("images")

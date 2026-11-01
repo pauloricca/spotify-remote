@@ -70,6 +70,7 @@ defmodule Tune.Spotify.Client do
   @callback library(token(), atom(), keyword()) :: {:ok, map()} | {:error, term()}
   @callback queue(token()) :: {:ok, map()} | {:error, term()}
   @callback saved_items(token(), [String.t()]) :: {:ok, [boolean()]} | {:error, term()}
+  @callback add_to_playlist(token(), Playlist.id(), Schema.uri()) :: :ok | {:error, term()}
   @callback set_saved(token(), String.t(), boolean()) :: :ok | {:error, term()}
   @callback set_shuffle(token(), boolean()) :: :ok | {:error, term()}
   @callback set_repeat(token(), String.t()) :: :ok | {:error, term()}

@@ -22,6 +22,12 @@ Home, Favourites, Library, and Search share the same player. Long
 library and search results stay inside the content pane; the document itself
 does not scroll.
 
+The player row opens the queue with its leftmost menu button and an editable
+playlist picker with its rightmost plus button. The picker keeps the chosen
+track or episode fixed while playback advances. New sign-ins request
+`playlist-modify-public` and `playlist-modify-private`; existing logins can use
+the picker's Reconnect Spotify link if Spotify rejects a write for missing scopes.
+
 Browser QA with fixture data covers 1920 × 1050, 1280 × 680, approximately
 1024 × 600, and 390 × 844 CSS viewports. These checks do not replace testing
 on the physical Echo with Silk and live Spotify playback.

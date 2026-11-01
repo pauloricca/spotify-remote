@@ -22,7 +22,9 @@ defmodule Tune.Spotify.Schema.Playlist do
     :spotify_url,
     :description,
     :thumbnails,
-    :tracks
+    :tracks,
+    owner_id: nil,
+    collaborative: false
   ]
 
   @type id :: Schema.id()
@@ -33,8 +35,13 @@ defmodule Tune.Spotify.Schema.Playlist do
           spotify_url: String.t(),
           description: String.t(),
           thumbnails: Schema.thumbnails(),
+          owner_id: String.t() | nil,
+          collaborative: boolean(),
           tracks: [Track.t()] | :not_fetched
         }
+
+  def editable?(%__MODULE__{owner_id: owner_id, collaborative: collaborative}, user_id),
+    do: owner_id == user_id or collaborative == true
 
   @spec total_duration_ms(t()) :: Duration.milliseconds() | :not_available
   def total_duration_ms(playlist) do

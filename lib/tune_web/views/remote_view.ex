@@ -5,6 +5,11 @@ defmodule TuneWeb.RemoteView do
   alias Tune.Spotify.Schema.{Track, Episode, Playlist}
   alias TuneWeb.{HeaderView, PlayerView, SearchView}
 
+  def playlist_item?(%{uri: uri}) when is_binary(uri),
+    do: Regex.match?(~r/^spotify:(track|episode):[A-Za-z0-9]+$/, uri)
+
+  def playlist_item?(_), do: false
+
   def artwork(%Track{album: album}), do: artwork(album)
 
   def artwork(%{thumbnails: images}) when is_map(images),

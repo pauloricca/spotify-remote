@@ -80,7 +80,7 @@
     </div>
     <%= live_component MiniPlayerComponent, device_name: @device_name, premium?: @premium?, now_playing: @now_playing, devices: @devices, id: :mini_player %>
     <%= if @panel do %>
-      <%= render TuneWeb.RemoteView, "panel.html", panel: @panel, queue: @queue, queue_error: @queue_error, devices: @devices, player: @now_playing %>
+      <%= render TuneWeb.RemoteView, "panel.html", panel: @panel, picker: @playlist_picker, queue: @queue, queue_error: @queue_error, devices: @devices, player: @now_playing %>
     <% end %>
     <%= if @premium? do %>
       <script defer src="https://sdk.scdn.co/spotify-player.js"></script>

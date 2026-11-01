@@ -744,6 +744,29 @@ defmodule Tune.Spotify.Session.HTTPTest do
       assert {:ok, [true]} == HTTP.saved_items(id, ["spotify:track:t1"])
     end
 
+    test "playlist writes invalidate reads and are never served from the cache" do
+      credentials = Generators.credentials() |> Enum.take(1) |> hd()
+      profile = Generators.profile() |> Enum.take(1) |> hd()
+      id = "playlist-writes"
+      expect_profile(credentials.token, profile)
+      expect_nothing_playing(credentials.token)
+      expect_no_devices(credentials.token)
+      start_supervised!({HTTP, {id, credentials}})
+      assert profile == HTTP.get_profile(id)
+      expect(Client.Mock, :library, fn _, :playlists, [] -> {:ok, %{items: []}} end)
+      assert {:ok, %{items: []}} == HTTP.library(id, :playlists, [])
+
+      expect(Client.Mock, :add_to_playlist, 2, fn token, "p1", "spotify:track:t1" ->
+        assert token == credentials.token
+        :ok
+      end)
+
+      assert :ok == HTTP.add_to_playlist(id, "p1", "spotify:track:t1")
+      assert :ok == HTTP.add_to_playlist(id, "p1", "spotify:track:t1")
+      expect(Client.Mock, :library, fn _, :playlists, [] -> {:ok, %{items: []}} end)
+      assert {:ok, %{items: []}} == HTTP.library(id, :playlists, [])
+    end
+
     test "a session with no browser subscribers does not poll" do
       credentials = Generators.credentials() |> Enum.take(1) |> hd()
       profile = Generators.profile() |> Enum.take(1) |> hd()

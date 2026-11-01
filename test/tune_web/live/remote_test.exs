@@ -83,11 +83,119 @@ defmodule TuneWeb.RemoteTest do
     assert has_element?(view, "#progress_bar-bar[value='193000']")
   end
 
+  test "player exposes queue and playlist controls without a cog menu", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/now-playing")
+    assert has_element?(view, "#mini-player button[aria-label='Open queue']")
+    assert has_element?(view, "#mini-player button[aria-label='Add to playlist']:not([disabled])")
+    refute has_element?(view, "#mini-player details")
+
+    assert length(
+             view
+             |> render()
+             |> Floki.parse_document!()
+             |> Floki.find(".touch-player-controls button")
+           ) == 7
+  end
+
+  test "playlist picker filters destinations and keeps the selected track when playback changes",
+       %{conn: conn} do
+    owned = %{F.playlist() | id: "owned", owner_id: "remote-user"}
+
+    shared = %{
+      F.playlist()
+      | id: "shared",
+        name: "Shared music",
+        owner_id: "friend",
+        collaborative: true
+    }
+
+    readonly = %{F.playlist() | id: "readonly", name: "Read only", owner_id: "friend"}
+    {:ok, view, _} = live(conn, "/now-playing")
+
+    expect(Mock, :library, fn "remote-user", :playlists, [offset: 0, after: nil] ->
+      {:ok, %{items: [owned, shared, readonly], total: 3, next: nil}}
+    end)
+
+    view |> element("#mini-player button[phx-click=open_add_to_playlist]") |> render_click()
+    assert has_element?(view, ".playlist-choice[phx-value-playlist=owned]")
+    assert has_element?(view, ".playlist-choice[phx-value-playlist=shared]")
+    refute has_element?(view, ".playlist-choice[phx-value-playlist=readonly]")
+    render_click(view, "add_to_playlist", %{"playlist" => "readonly"})
+    assert has_element?(view, "#playback-panel")
+
+    send(
+      view.pid,
+      {:now_playing,
+       %{F.player() | item: %{F.track() | uri: "spotify:track:track2", name: "Nangs"}}}
+    )
+
+    assert render(view) =~ "Nangs"
+    assert has_element?(view, ".playlist-target", "Let It Happen")
+    expect(Mock, :add_to_playlist, fn "remote-user", "owned", "spotify:track:track1" -> :ok end)
+    view |> element(".playlist-choice[phx-value-playlist=owned]") |> render_click()
+    assert render(view) =~ "Added Let It Happen to Chilled Vibes"
+    refute has_element?(view, "#playback-panel")
+    render_click(view, "add_to_playlist", %{"playlist" => "owned"})
+  end
+
+  test "playlist picker can reach editable destinations on later pages", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/now-playing")
+
+    expect(Mock, :library, fn _, :playlists, [offset: 0, after: nil] ->
+      {:ok,
+       %{items: [], total: 25, next: "https://api.spotify.com/v1/me/playlists?offset=24&limit=24"}}
+    end)
+
+    view |> element("#mini-player button[phx-click=open_add_to_playlist]") |> render_click()
+
+    expect(Mock, :library, fn _, :playlists, [offset: 24, after: nil] ->
+      {:ok, %{items: [%{F.playlist() | owner_id: "remote-user"}], total: 25, next: nil}}
+    end)
+
+    view |> element("button[phx-click=more_playlist_choices]") |> render_click()
+    assert has_element?(view, ".playlist-choice", "Chilled Vibes")
+    refute has_element?(view, "button[phx-click=more_playlist_choices]")
+  end
+
+  test "playlist loading can be retried without switching the target track", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/now-playing")
+    expect(Mock, :library, fn _, :playlists, _ -> {:error, 403} end)
+    view |> element("#mini-player button[phx-click=open_add_to_playlist]") |> render_click()
+    assert has_element?(view, "#playback-panel a[href='/auth/spotify']")
+    send(view.pid, {:now_playing, %{F.player() | item: %{F.track() | name: "Next song"}}})
+    render(view)
+
+    expect(Mock, :library, fn _, :playlists, _ ->
+      {:ok, %{items: [%{F.playlist() | owner_id: "remote-user"}], total: 1, next: nil}}
+    end)
+
+    view |> element("button[phx-click=retry_playlist_choices]") |> render_click()
+    assert has_element?(view, ".playlist-target", "Let It Happen")
+    assert has_element?(view, ".playlist-choice")
+  end
+
+  test "playlist write permission failures keep the picker open and offer reconnection", %{
+    conn: conn
+  } do
+    {:ok, view, _} = live(conn, "/now-playing")
+
+    expect(Mock, :library, fn _, :playlists, _ ->
+      {:ok, %{items: [%{F.playlist() | owner_id: "remote-user"}], total: 1, next: nil}}
+    end)
+
+    view |> element("#mini-player button[phx-click=open_add_to_playlist]") |> render_click()
+    expect(Mock, :add_to_playlist, fn _, _, _ -> {:error, 403} end)
+    view |> element(".playlist-choice") |> render_click()
+    assert has_element?(view, "#playback-panel a[href='/auth/spotify']", "Reconnect Spotify")
+    refute render(view) =~ "Added Let It Happen"
+  end
+
   test "empty playback still lets the user choose a device", %{conn: conn} do
     stub(Mock, :now_playing, fn _ -> %Player{} end)
     {:ok, view, _} = live(conn, "/now-playing")
     assert has_element?(view, "h1", "Nothing playing yet")
     refute has_element?(view, "#now_progress-bar")
+    assert has_element?(view, "#mini-player button[aria-label='Add to playlist'][disabled]")
     assert has_element?(view, ".empty-state button[phx-click=open_devices]")
   end
 
@@ -102,7 +210,7 @@ defmodule TuneWeb.RemoteTest do
        }}
     end)
 
-    view |> element(".now-tools button[phx-click=open_queue]") |> render_click()
+    view |> element("#mini-player button[phx-click=open_queue]") |> render_click()
     assert has_element?(view, "[role=dialog] h2", "Queue")
     expect(Mock, :play, fn "remote-user", "spotify:track:track2" -> :ok end)
     view |> element("#playback-panel [data-test-queue-item=track2]", "Nangs") |> render_click()

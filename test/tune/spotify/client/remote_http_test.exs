@@ -5,6 +5,7 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest.Server do
 
   def call(conn, agent) do
     conn = fetch_query_params(conn)
+    {:ok, request_body, conn} = read_body(conn)
     {owner, status, body, headers} = Agent.get(agent, & &1)
 
     send(
@@ -12,6 +13,8 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest.Server do
       {:spotify_request, conn.method, conn.request_path, conn.query_params,
        get_req_header(conn, "authorization")}
     )
+
+    if request_body != "", do: send(owner, {:spotify_request_body, request_body})
 
     conn =
       Enum.reduce(headers, conn, fn {key, value}, conn -> put_resp_header(conn, key, value) end)
@@ -148,6 +151,28 @@ defmodule Tune.Spotify.Client.RemoteHTTPTest do
 
     assert :ok = HTTP.set_saved("token", "spotify:track:t1", true)
     assert_receive {:spotify_request, "PUT", "/v1/me/library", %{"uris" => "spotify:track:t1"}, _}
+  end
+
+  test "adding a track posts its URI to the current playlist items endpoint", %{agent: agent} do
+    respond(agent, %{snapshot_id: "new-snapshot"}, 201)
+    assert :ok = HTTP.add_to_playlist("token", "p1", "spotify:track:t1")
+    assert_receive {:spotify_request, "POST", "/v1/playlists/p1/items", %{}, ["Bearer token"]}
+    assert_receive {:spotify_request_body, body}
+    assert Jason.decode!(body) == %{"uris" => ["spotify:track:t1"]}
+  end
+
+  @tag capture_log: true
+  test "playlist writes surface permission errors", %{agent: agent} do
+    respond(agent, %{error: %{message: "Insufficient scope"}}, 403)
+    assert {:error, 403} = HTTP.add_to_playlist("token", "p1", "spotify:episode:e1")
+  end
+
+  test "playlist ownership and collaboration metadata are preserved", %{agent: agent} do
+    item = Map.merge(playlist_json(), %{"owner" => %{"id" => "me"}, "collaborative" => true})
+    respond(agent, %{items: [item], total: 1, next: nil})
+
+    assert {:ok, %{items: [%Playlist{owner_id: "me", collaborative: true}]}} =
+             HTTP.library("token", :playlists, [])
   end
 
   test "shuffle and repeat send Spotify's setting values", %{agent: agent} do

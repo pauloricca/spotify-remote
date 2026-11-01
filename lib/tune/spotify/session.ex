@@ -57,6 +57,7 @@ defmodule Tune.Spotify.Session do
   @callback library(id(), atom(), keyword()) :: {:ok, map()} | {:error, term()}
   @callback queue(id()) :: {:ok, map()} | {:error, term()}
   @callback saved_items(id(), [String.t()]) :: {:ok, [boolean()]} | {:error, term()}
+  @callback add_to_playlist(id(), Schema.Playlist.id(), Schema.uri()) :: :ok | {:error, term()}
   @callback set_saved(id(), String.t(), boolean()) :: :ok | {:error, term()}
   @callback set_shuffle(id(), boolean()) :: :ok | {:error, term()}
   @callback set_repeat(id(), String.t()) :: :ok | {:error, term()}

@@ -1,7 +1,8 @@
 <div class="panel-backdrop" phx-click="close_panel" aria-hidden="true"></div>
 <aside class="drawer live-drawer" role="dialog" aria-modal="true" aria-labelledby="panel-heading" id="playback-panel" phx-hook="PlaybackPanel" phx-window-keydown="close_panel" phx-key="Escape" tabindex="-1">
-  <div class="drawer-heading"><h2 id="panel-heading"><%= if @panel == :queue, do: "Queue", else: "Play on" %></h2><button class="icon-button" phx-click="close_panel" aria-label="Close panel"><%= render HeaderView, "icon.html", name: :close %></button></div>
-  <%= if @panel == :queue do %>
+  <div class="drawer-heading"><h2 id="panel-heading"><%= case @panel do %><% :queue -> %>Queue<% :playlists -> %>Add to playlist<% _ -> %>Play on<% end %></h2><button class="icon-button" phx-click="close_panel" aria-label="Close panel"><%= render HeaderView, "icon.html", name: :close %></button></div>
+  <%= case @panel do %>
+  <% :queue -> %>
     <%= if @queue_error do %><p role="status" class="muted"><%= error_message(@queue_error) %></p><button class="outline-button" phx-click="open_queue">Try again</button><% else %>
       <h3 class="panel-label">Now Playing</h3>
       <% current = @queue.currently_playing || @player.item %>
@@ -12,7 +13,28 @@
       <% end %>
       <button class="outline-button" phx-click="open_queue">Refresh queue</button>
     <% end %>
-  <% else %>
+  <% :playlists -> %>
+    <p class="playlist-target"><strong><%= @picker.item.name %></strong><%= byline(@picker.item) %></p>
+    <%= if @picker.error do %>
+      <p class="playlist-error" role="status"><%= error_message(@picker.error) %></p>
+      <button class="outline-button" phx-click="retry_playlist_choices">Try again</button>
+    <% end %>
+    <%= if @picker.write_error do %>
+      <p class="playlist-error" role="status"><%= if @picker.write_error == 403, do: "Reconnect Spotify to allow adding to playlists.", else: "Spotify couldn’t confirm this change. Check the playlist before trying again." %></p>
+    <% end %>
+    <%= if @picker.error == 403 || @picker.write_error == 403 do %>
+      <p class="playlist-error"><a href="/auth/spotify">Reconnect Spotify</a></p>
+    <% end %>
+    <%= if @picker.items == [] && is_nil(@picker.error) do %>
+      <p class="muted">No editable playlists on this page. Only playlists you own or collaborate on can be changed.</p>
+    <% end %>
+    <%= for playlist <- @picker.items do %>
+      <button class="playlist-choice" phx-click="add_to_playlist" phx-value-playlist="<%= playlist.id %>" phx-disable-with="Adding…" aria-label="Add to <%= playlist.name %>">
+        <%= img_tag artwork(playlist), alt: "" %><span><%= playlist.name %></span>
+      </button>
+    <% end %>
+    <%= if @picker.next do %><button class="outline-button" phx-click="more_playlist_choices">More playlists</button><% end %>
+  <% _ -> %>
     <%= if @devices == [] do %><div class="empty-state"><h3>No devices found</h3><p>Open Spotify on your Echo or another device, then refresh.</p></div><% end %>
     <%= for device <- @devices do %>
       <button class="device-row <%= if device.is_active, do: "active" %>" phx-click="transfer_playback" phx-value-device="<%= device.id %>" <%= if device.is_restricted || is_nil(device.id), do: "disabled" %> aria-pressed="<%= device.is_active %>">

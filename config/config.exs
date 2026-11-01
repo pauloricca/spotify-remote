@@ -41,6 +41,8 @@ spotify_scope =
     user-library-modify
     user-follow-read
     user-follow-modify
+    playlist-modify-public
+    playlist-modify-private
     playlist-read-private
     playlist-read-collaborative
   )

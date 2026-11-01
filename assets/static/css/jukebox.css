@@ -96,9 +96,6 @@ button svg.icon, .button svg.icon { fill: none; stroke: currentColor; }
 #explorer .player-meta { min-width: 0; }
 #explorer .player-meta h2 { font-size: clamp(28px, 2.7vw, 50px); line-height: 1.15; font-weight: 600; margin: 0 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #explorer .player-meta p { font-size: clamp(20px, 1.8vw, 34px); color: #e3c9a7; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#explorer .player-menu summary { display: grid; place-items: center; width: 48px; height: 48px; color: #e3c9a7; }
-#explorer .player-menu nav { top: auto; bottom: 52px; background: #35291d; width: max-content; max-width: 85vw; border-color: #ffe0b133; }
-#explorer .player-menu nav a, #explorer .player-menu nav button { display: block; text-align: left; padding: 14px 20px; min-height: 52px; background: transparent; color: #ffead0; font-size: 20px; font-weight: 400; }
 #explorer .jukebox-player .progress, #explorer .idle-progress { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 5px; margin: 0; width: 100%; }
 #explorer .jukebox-player progress { grid-column: 1 / 3; grid-row: 1; height: 44px; padding: 18px 0; width: 100%; margin: 0; background: transparent; border: 0; cursor: pointer; }
 #explorer .jukebox-player progress::-webkit-progress-bar { background: #6a5741; border-radius: 8px; }
@@ -109,11 +106,11 @@ button svg.icon, .button svg.icon { fill: none; stroke: currentColor; }
 #explorer .jukebox-player .total_duration { grid-column: 2; grid-row: 2; justify-self: end; }
 #explorer .idle-progress>span:first-child { grid-column: 1/3; height: 8px; background: #6a5741; border-radius: 8px; margin: 18px 0; }
 #explorer .idle-progress>span:last-child { justify-self: end; }
-#explorer .touch-player-controls { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
-#explorer .touch-player-controls button { color: var(--cream); width: clamp(52px, 4.6vw, 80px); height: clamp(52px, 4.6vw, 80px); padding: 12px; position: relative; }
-#explorer .touch-player-controls svg { width: clamp(28px, 2.4vw, 44px); height: clamp(28px, 2.4vw, 44px); fill: currentColor; }
+#explorer .touch-player-controls { display: grid; grid-template-columns: repeat(3, minmax(44px, 1fr)) minmax(64px, 1.4fr) repeat(3, minmax(44px, 1fr)); align-items: center; gap: 0; }
+#explorer .touch-player-controls button { color: var(--cream); width: 100%; min-width: 44px; height: clamp(48px, 4vw, 72px); padding: 8px; position: relative; }
+#explorer .touch-player-controls svg { width: clamp(24px, 2vw, 36px); height: clamp(24px, 2vw, 36px); fill: currentColor; }
 #explorer .touch-player-controls svg.icon { fill: none; }
-#explorer .touch-player-controls .touch-play { width: clamp(76px, 7vw, 126px); height: clamp(76px, 7vw, 126px); background: var(--cream); color: #21180d; }
+#explorer .touch-player-controls .touch-play { width: min(100%, 104px); height: auto; aspect-ratio: 1; justify-self: center; background: var(--cream); color: #21180d; }
 #explorer .touch-play svg { width: 48%; height: 48%; }
 #explorer .touch-player-controls .is-active { background: #ffe0b124; box-shadow: inset 0 0 0 2px #ffe0b166; }
 #explorer .repeat-one { position: absolute; font-size: 14px; }
@@ -193,15 +190,16 @@ button svg.icon, .button svg.icon { fill: none; stroke: currentColor; }
   #explorer.jukebox-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto !important; grid-template-areas: 'header' 'media' 'miniplayer' !important; gap: 14px; padding: 12px; }
   #explorer .nav-item { flex-direction: column; gap: 4px; font-size: 14px; min-height: 60px; }
   #explorer .nav-item svg { width: 24px; height: 24px; }
-  #explorer .jukebox-player { grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 8px 12px; }
+  #explorer .jukebox-player { grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 8px 12px; }
   #explorer .player-artwork { grid-column: 1; grid-row: 1; height: 56px; }
   #explorer .player-heading { grid-column: 2; grid-row: 1; align-self: center; }
   #explorer .player-meta h2 { font-size: 20px; }
   #explorer .player-meta p { font-size: 15px; }
-  #explorer .player-menu, #explorer .jukebox-player .progress, #explorer .idle-progress { display: none; }
-  #explorer .touch-player-controls { grid-column: 3; grid-row: 1; }
+  #explorer .jukebox-player .progress, #explorer .idle-progress { display: none; }
+  #explorer .touch-player-controls { grid-column: 3; grid-row: 1; display: flex; }
   #explorer .touch-player-controls button { display: none; }
-  #explorer .touch-player-controls .touch-play { display: flex; width: 56px; height: 56px; }
+  #explorer .touch-player-controls .player-extra { display: inline-flex; width: 44px; height: 48px; }
+  #explorer .touch-player-controls .touch-play { display: flex; width: 48px; height: 48px; }
   #explorer .player-tools { grid-column: 1/4; grid-row: 2; padding: 0; }
   #explorer .touch-volume, #explorer .touch-device { min-height: 48px; }
   #explorer .home-dashboard { gap: 16px; padding: 0; }
@@ -212,4 +210,19 @@ button svg.icon, .button svg.icon { fill: none; stroke: currentColor; }
   #explorer .recent-tile .name { font-size: 16px; padding-top: 6px; }
   #explorer .results, #explorer .browse-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #explorer .alert { left: 16px; right: 16px; font-size: 18px; }
+}
+
+#explorer .playlist-choice { display: flex; align-items: center; gap: 18px; min-height: 84px; padding: 12px; width: 100%; background: transparent; color: #ffead0; text-align: left; border-radius: 12px; }
+#explorer .playlist-choice:hover { background: #ffe0b115; }
+#explorer .playlist-choice img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; }
+#explorer .playlist-choice span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+#explorer .playlist-target { color: var(--muted); font-size: 20px; margin-bottom: 24px; }
+#explorer .playlist-target strong { color: #ffead0; display: block; }
+#explorer .playlist-error { color: #ffd2c2; font-size: 20px; margin-bottom: 16px; }
+#explorer .playlist-error a { display: inline-flex; align-items: center; min-height: 48px; text-decoration: underline; }
+
+@media (min-width: 701px) and (max-width: 1000px) {
+  #explorer .touch-player-controls { grid-template-columns: repeat(5, minmax(44px, 1fr)); }
+  #explorer .touch-player-controls .player-extra:first-child { grid-column: 1; grid-row: 2; }
+  #explorer .touch-player-controls .player-extra:last-child { grid-column: 5; grid-row: 2; }
 }
