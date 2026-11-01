@@ -34,21 +34,22 @@ defmodule Tune.Spotify.Transport do
         {:reply, {:error, {state.kind, seconds}}, state}
 
       true ->
-        result = Finch.request(request, Tune.Finch, pool_timeout: 2_000, receive_timeout: 5_000)
-
-        case result do
-          {:ok, %{status: 429} = response} ->
-            kind = if response.body =~ "QUOTA_EXCEEDED", do: :quota_exceeded, else: :rate_limited
-            fallback = if kind == :quota_exceeded, do: 3600, else: 60
-            seconds = retry_after(response.headers, fallback)
-            state = %{until: System.monotonic_time(:millisecond) + seconds * 1000, kind: kind}
-            {:reply, {:error, {kind, seconds}}, state}
-
-          _ ->
-            {:reply, validate_json(result, request), %{until: nil, kind: nil}}
-        end
+        request
+        |> Finch.request(Tune.Finch, pool_timeout: 2_000, receive_timeout: 5_000)
+        |> handle_response(request)
     end
   end
+
+  defp handle_response({:ok, %{status: 429} = response}, _request) do
+    kind = if response.body =~ "QUOTA_EXCEEDED", do: :quota_exceeded, else: :rate_limited
+    fallback = if kind == :quota_exceeded, do: 3600, else: 60
+    seconds = retry_after(response.headers, fallback)
+    state = %{until: System.monotonic_time(:millisecond) + seconds * 1000, kind: kind}
+    {:reply, {:error, {kind, seconds}}, state}
+  end
+
+  defp handle_response(result, request),
+    do: {:reply, validate_json(result, request), %{until: nil, kind: nil}}
 
   defp retry_after(headers, fallback) do
     value =

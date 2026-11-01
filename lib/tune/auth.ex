@@ -6,7 +6,10 @@ defmodule Tune.Auth do
   alias Tune.Spotify.{Schema.User, Session}
   @type http_session :: map()
 
-  @spec load_user(http_session()) :: {:authenticated, Session.id(), User.t()} | {:error, term()}
+  @spec load_user(http_session()) ::
+          {:authenticated, Session.id(), User.t()}
+          | {:unavailable, Session.id(), term()}
+          | {:error, term()}
   def load_user(%{"spotify_id" => session_id, "spotify_credentials" => credentials}) do
     case spotify_session().setup(session_id, credentials) do
       :ok ->

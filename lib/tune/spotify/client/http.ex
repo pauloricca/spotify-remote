@@ -755,62 +755,27 @@ defmodule Tune.Spotify.Client.HTTP do
 
   defp parse_now_playing(data) do
     case Map.get(data, "currently_playing_type") do
-      nil ->
-        %Player{}
-
-      # this appears when queueing a new album/show
-      "unknown" ->
-        %Player{}
-
-      "ad" ->
+      # Spotify reports "unknown" while queueing a new album or show.
+      type when type in [nil, "unknown", "ad"] ->
         %Player{}
 
       "track" ->
-        item =
-          data
-          |> Map.get("item")
-          |> parse_track()
-
-        progress_ms = Map.get(data, "progress_ms")
-        status = if Map.get(data, "is_playing"), do: :playing, else: :paused
-
-        device =
-          data
-          |> Map.get("device")
-          |> parse_device()
-
-        %Player{
-          status: status,
-          item: item,
-          progress_ms: progress_ms || 0,
-          device: device,
-          shuffle_state: Map.get(data, "shuffle_state", false),
-          repeat_state: Map.get(data, "repeat_state", "off")
-        }
+        parse_player(data, parse_track(Map.get(data, "item")))
 
       "episode" ->
-        item =
-          data
-          |> Map.get("item")
-          |> parse_episode_with_metadata()
-
-        progress_ms = Map.get(data, "progress_ms")
-        status = if Map.get(data, "is_playing"), do: :playing, else: :paused
-
-        device =
-          data
-          |> Map.get("device")
-          |> parse_device()
-
-        %Player{
-          status: status,
-          item: item,
-          progress_ms: progress_ms || 0,
-          device: device,
-          shuffle_state: Map.get(data, "shuffle_state", false),
-          repeat_state: Map.get(data, "repeat_state", "off")
-        }
+        parse_player(data, parse_episode_with_metadata(Map.get(data, "item")))
     end
+  end
+
+  defp parse_player(data, item) do
+    %Player{
+      status: if(Map.get(data, "is_playing"), do: :playing, else: :paused),
+      item: item,
+      progress_ms: Map.get(data, "progress_ms") || 0,
+      device: parse_device(Map.get(data, "device")),
+      shuffle_state: Map.get(data, "shuffle_state", false),
+      repeat_state: Map.get(data, "repeat_state", "off")
+    }
   end
 
   defp parse_track(item) do

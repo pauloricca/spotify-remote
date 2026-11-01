@@ -10,12 +10,15 @@ Silk audio playback via Spotify's Web Playback SDK is unverified.
 
 Echo Show 11 has a 1920 × 1200 physical display. Silk's CSS viewport can be
 smaller because of display scaling and its address bar. The dashboard uses
-the visible browser height (`visualViewport.height`, falling back to
-`innerHeight`) rather than assuming the entire display is available.
+the smallest available browser height (`visualViewport.height`, `innerHeight`,
+and the document viewport) rather than assuming the entire display is available.
+It also reserves 48–80 CSS pixels at the bottom for Silk/system overlays that
+may extend into the reported viewport, plus any device safe-area inset.
 
 Home has a persistent player, five recent albums (four on narrower displays),
-and three saved playlists. Large arrow buttons page through each shelf without
-scrolling. Home, Favourites, Library, and Search share the same player. Long
+and three saved playlists. Each shelf scrolls horizontally with native touch
+swiping, trackpad gestures, or keyboard navigation; it does not snap whole pages.
+Home, Favourites, Library, and Search share the same player. Long
 library and search results stay inside the content pane; the document itself
 does not scroll.
 

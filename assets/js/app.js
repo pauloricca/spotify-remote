@@ -22,21 +22,23 @@ import ProgressBar from "./ProgressBar";
 import AudioPlayer from "./AudioPlayer";
 import GlobalShortcuts from "./GlobalShortcuts";
 import StopKeyDownPropagation from "./StopKeyDownPropagation";
-import TouchShelf from "./TouchShelf";
+import { visibleViewportHeight } from "./Viewport";
 
 window.spotifySDKReady = false;
 
-// Fix Mobile Safari vh issue (https://www.bram.us/2020/05/06/100vh-in-safari-on-ios/)
+// Silk can report different layout and visible heights while its toolbar changes.
 const setVh = () => {
-  const vh = window.innerHeight * 0.01;
+  const height = visibleViewportHeight();
+  const vh = height * 0.01;
   document.documentElement.style.setProperty("--vh", `${vh}px`);
-  const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   document.documentElement.style.setProperty("--app-height", `${Math.floor(height)}px`);
 };
 
 setVh();
 window.addEventListener("load", setVh);
 window.addEventListener("resize", setVh);
+window.addEventListener("orientationchange", setVh);
+window.addEventListener("pageshow", setVh);
 if (window.visualViewport) window.visualViewport.addEventListener("resize", setVh);
 
 let csrfToken = document
@@ -52,7 +54,6 @@ let liveSocket = new LiveSocket("/live", Socket, {
     AudioPlayer,
     GlobalShortcuts,
     StopKeyDownPropagation,
-    TouchShelf,
   },
 });
 

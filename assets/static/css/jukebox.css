@@ -4,12 +4,14 @@
   --green: #ffe0b1;
   --muted: #ccb99f;
   --line: #f3c79224;
+  /* Leave room for Silk/system UI that may overlap the reported viewport. */
+  --bottom-clearance: clamp(48px, 7vh, 80px);
   --touch-gap: clamp(12px, 1.5vw, 28px);
 }
 html { background: #17120c; overflow: hidden; }
 body { color: #ffead0; background: radial-gradient(ellipse at 18% 45%, #392817 0, #21190f 40%, #15120d 100%); font-size: clamp(18px, 1.5vw, 28px); }
 body, main { margin: 0; overflow: hidden; overscroll-behavior: none; }
-main { height: 100vh; height: var(--app-height, 100vh); }
+main { height: calc(100vh - var(--bottom-clearance)); height: calc(var(--app-height, 100vh) - var(--bottom-clearance) - env(safe-area-inset-bottom, 0px)); max-height: calc(100svh - var(--bottom-clearance) - env(safe-area-inset-bottom, 0px)); }
 button, .button, input, select { font-size: inherit; }
 button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
 button:disabled { opacity: .35; cursor: default; }
@@ -61,26 +63,25 @@ button svg.icon, .button svg.icon { fill: none; stroke: currentColor; }
 #explorer .nav-item.active svg { color: inherit; }
 #explorer .nav-item:hover { background: #ffe0b122; }
 #explorer .nav-item.active:hover { background: #ffe5c0; }
-#explorer .media { padding: 0 2px 2px; min-height: 0; min-width: 0; scrollbar-color: #d4ae7955 transparent; overflow-x: hidden; overflow-y: auto; }
-#explorer[data-screen=suggestions] .media { overflow: hidden; }
+#explorer .media { padding: 0 2px 24px; min-height: 0; min-width: 0; scrollbar-color: #d4ae7955 transparent; overflow-x: hidden; overflow-y: auto; }
+#explorer[data-screen=suggestions] .media { overflow: hidden; padding-bottom: 0; }
 #explorer .home-dashboard { display: grid; grid-template-rows: minmax(0, .95fr) minmax(0, 1.15fr); gap: clamp(18px, 3vh, 38px); height: 100%; padding-bottom: clamp(0px, 2vh, 22px); }
 #explorer .touch-shelf { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 #explorer .shelf-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-shrink: 0; margin-bottom: clamp(10px, 1.7vh, 22px); }
 #explorer .shelf-heading h1, #explorer .shelf-heading h2 { margin: 0; font-size: clamp(25px, 2.15vw, 40px); font-weight: 600; line-height: 1.25; }
-#explorer .shelf-paging { display: flex; gap: 4px; }
-#explorer .shelf-paging[hidden] { display: none; }
-#explorer .shelf-paging button { width: 48px; height: 48px; padding: 10px; color: var(--cream); }
-#explorer .shelf-paging button svg { width: 26px; height: 26px; }
-#explorer [data-shelf-next] svg { transform: rotate(180deg); }
-#explorer .shelf-window { overflow: hidden; min-height: 0; flex: 1; }
-#explorer .shelf-items { --visible-items: 5; display: flex; align-items: flex-start; gap: var(--touch-gap); height: 100%; transition: transform .25s ease; }
+#explorer .shelf-window { overflow-x: auto; overflow-y: hidden; min-height: 0; flex: 1; padding: 2px 2px 12px; touch-action: pan-x; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #e3c9a766 transparent; }
+#explorer .shelf-window::-webkit-scrollbar { height: 8px; }
+#explorer .shelf-window::-webkit-scrollbar-thumb { background: #e3c9a766; border-radius: 8px; }
+#explorer .shelf-window::-webkit-scrollbar-track { background: transparent; }
+#explorer .shelf-window:focus-visible { outline: 2px solid var(--cream); outline-offset: -2px; }
+#explorer .shelf-items { --visible-items: 5; display: flex; align-items: flex-start; gap: var(--touch-gap); height: 100%; }
 #explorer .playlist-shelf .shelf-items { --visible-items: 3; }
 #explorer [data-shelf-item] { flex: 0 0 calc((100% - (var(--visible-items) - 1) * var(--touch-gap)) / var(--visible-items)); min-width: 0; height: 100%; padding: 0; background: #72503233; border-radius: clamp(14px, 1.4vw, 24px); overflow: hidden; position: relative; text-align: left; color: #fff0d9; }
 #explorer [data-shelf-item]:hover { filter: brightness(1.12); }
 #explorer [data-shelf-item]:focus-visible { outline-offset: -4px; }
-#explorer .recent-tile { display: flex; flex-direction: column; background: transparent; }
-#explorer .recent-tile img { width: 100%; height: auto; aspect-ratio: 1; min-height: 0; flex: 0 1 auto; object-fit: cover; border-radius: inherit; }
-#explorer .recent-tile .name { display: block; width: 100%; font-size: clamp(16px, 1.35vw, 25px); line-height: 1.3; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 10px; }
+#explorer .recent-tile { display: flex; flex-direction: column; background: transparent; border-radius: 0; }
+#explorer .recent-tile img { width: 100%; height: auto; aspect-ratio: 1; min-height: 0; flex: 0 1 auto; object-fit: cover; border-radius: clamp(14px, 1.4vw, 24px); }
+#explorer .recent-tile .name { flex: 0 0 auto; display: block; width: 100%; font-size: clamp(16px, 1.35vw, 25px); line-height: 1.3; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 10px 0 4px; }
 #explorer .playing-badge { position: absolute; right: 10px; top: 10px; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--cream); color: #21190f; }
 #explorer .playlist-tile { height: auto; max-height: 100%; aspect-ratio: 1.25; }
 #explorer .playlist-tile img { width: 100%; height: 100%; object-fit: cover; opacity: .85; }
@@ -168,7 +169,6 @@ button svg.icon, .button svg.icon { fill: none; stroke: currentColor; }
   #explorer .nav-item { font-size: 18px; gap: 8px; }
   #explorer .nav-item svg { width: 26px; height: 26px; }
   #explorer .recent-shelf .shelf-items { --visible-items: 4; }
-  #explorer .shelf-paging button { width: 44px; height: 44px; }
   #explorer .player-tools { gap: 8px; }
   #explorer .touch-device { gap: 8px; padding: 8px 12px; }
   #explorer .player-tools .icon { width: 24px; height: 24px; }
@@ -213,4 +213,3 @@ button svg.icon, .button svg.icon { fill: none; stroke: currentColor; }
   #explorer .results, #explorer .browse-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #explorer .alert { left: 16px; right: 16px; font-size: 18px; }
 }
-@media (prefers-reduced-motion: reduce) { #explorer .shelf-items { transition: none; } }

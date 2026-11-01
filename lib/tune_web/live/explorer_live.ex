@@ -132,7 +132,7 @@ defmodule TuneWeb.ExplorerLive do
     |> assign(
       session_id: session_id,
       user: user,
-      premium?: ready? && User.premium?(user),
+      premium?: ready? and User.premium?(user),
       now_playing: player,
       devices: devices,
       player_token: token,
@@ -147,13 +147,13 @@ defmodule TuneWeb.ExplorerLive do
     {:noreply, assign(socket, :pending_route, {params, url})}
   end
 
+  def handle_params(params, _url, %{assigns: %{live_action: :library}} = socket),
+    do: handle_library(params, assign(socket, :panel, nil))
+
   def handle_params(params, url, socket) do
     socket = assign(socket, :panel, nil)
 
     case socket.assigns.live_action do
-      :library ->
-        handle_library(params, socket)
-
       :now_playing ->
         {:noreply,
          socket

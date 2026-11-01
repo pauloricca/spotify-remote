@@ -8,8 +8,8 @@ defmodule Tune.Spotify.Schema.User do
 
   @type t :: %__MODULE__{
           name: String.t(),
-          avatar_url: String.t(),
-          product: String.t()
+          avatar_url: String.t() | nil,
+          product: String.t() | nil
         }
 
   @spec premium?(t()) :: boolean()

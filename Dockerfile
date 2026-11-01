@@ -13,8 +13,7 @@ COPY lib lib
 COPY priv priv
 COPY assets assets
 RUN mix compile
-RUN npm ci --prefix assets --ignore-scripts \
-    && npm install --prefix assets --no-save --ignore-scripts sass@1.32.13 \
+RUN npm ci --prefix assets \
     && npm run deploy --prefix assets
 RUN mix phx.digest && mix release
 
