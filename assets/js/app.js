@@ -22,6 +22,7 @@ import ProgressBar from "./ProgressBar";
 import AudioPlayer from "./AudioPlayer";
 import GlobalShortcuts from "./GlobalShortcuts";
 import StopKeyDownPropagation from "./StopKeyDownPropagation";
+import TouchShelf from "./TouchShelf";
 
 window.spotifySDKReady = false;
 
@@ -29,10 +30,14 @@ window.spotifySDKReady = false;
 const setVh = () => {
   const vh = window.innerHeight * 0.01;
   document.documentElement.style.setProperty("--vh", `${vh}px`);
+  const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  document.documentElement.style.setProperty("--app-height", `${Math.floor(height)}px`);
 };
 
+setVh();
 window.addEventListener("load", setVh);
 window.addEventListener("resize", setVh);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", setVh);
 
 let csrfToken = document
   .querySelector("meta[name='csrf-token']")
@@ -47,6 +52,7 @@ let liveSocket = new LiveSocket("/live", Socket, {
     AudioPlayer,
     GlobalShortcuts,
     StopKeyDownPropagation,
+    TouchShelf,
   },
 });
 

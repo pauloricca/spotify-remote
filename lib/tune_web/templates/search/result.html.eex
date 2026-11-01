@@ -1,8 +1,8 @@
 <div class="result" data-test-id="<%= @item.id %>">
   <div class="artwork">
-    <div class="play-button" phx-click="play" phx-value-uri="<%= @item.uri %>">
+    <button class="play-button" phx-click="play" phx-value-uri="<%= @item.uri %>" aria-label="Play <%= name(@item) %>">
       <%= render TuneWeb.PlayerView, "icon_play.html", []%>
-    </div>
+    </button>
     <%= img_tag thumbnail(@item), alt: name(@item), loading: "lazy" %>
   </div>
   <div class="meta">

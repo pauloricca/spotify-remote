@@ -1,0 +1,216 @@
+/* The shell follows the visible Silk viewport, including its browser chrome. */
+:root {
+  --cream: #ffe0b1;
+  --green: #ffe0b1;
+  --muted: #ccb99f;
+  --line: #f3c79224;
+  --touch-gap: clamp(12px, 1.5vw, 28px);
+}
+html { background: #17120c; overflow: hidden; }
+body { color: #ffead0; background: radial-gradient(ellipse at 18% 45%, #392817 0, #21190f 40%, #15120d 100%); font-size: clamp(18px, 1.5vw, 28px); }
+body, main { margin: 0; overflow: hidden; overscroll-behavior: none; }
+main { height: 100vh; height: var(--app-height, 100vh); }
+button, .button, input, select { font-size: inherit; }
+button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
+button:disabled { opacity: .35; cursor: default; }
+button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible { outline: 3px solid var(--cream); outline-offset: 4px; }
+button svg.icon, .button svg.icon { fill: none; stroke: currentColor; }
+#explorer.jukebox-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 35fr) minmax(0, 65fr);
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  grid-template-areas: 'miniplayer header' 'miniplayer media' !important;
+  gap: clamp(18px, 3vh, 36px) clamp(28px, 4.5vw, 86px);
+  height: 100% !important;
+  max-width: none;
+  margin: 0;
+  padding: clamp(20px, 4vh, 54px) clamp(24px, 4vw, 76px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 0;
+}
+#explorer .jukebox-header { padding: 0; min-width: 0; }
+#explorer .sidebar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  flex-direction: row;
+  gap: 6px;
+  padding: 8px;
+  background: #f9d3a010;
+  border: 1px solid #e6ba8130;
+  border-radius: clamp(18px, 2vw, 30px);
+}
+#explorer .nav-item {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(8px, 1vw, 18px);
+  min-height: clamp(58px, 7vh, 84px);
+  padding: 8px;
+  font-size: clamp(18px, 1.7vw, 32px);
+  font-weight: 500;
+  color: #ffead0 !important;
+  border-radius: clamp(14px, 1.7vw, 24px);
+}
+#explorer .nav-item svg { width: clamp(26px, 2.4vw, 44px); height: clamp(26px, 2.4vw, 44px); }
+#explorer .nav-item:before { display: none; }
+#explorer .nav-item.active { background: var(--cream); color: #241a0f !important; box-shadow: inset 0 1px 0 #fff5; }
+#explorer .nav-item.active svg { color: inherit; }
+#explorer .nav-item:hover { background: #ffe0b122; }
+#explorer .nav-item.active:hover { background: #ffe5c0; }
+#explorer .media { padding: 0 2px 2px; min-height: 0; min-width: 0; scrollbar-color: #d4ae7955 transparent; overflow-x: hidden; overflow-y: auto; }
+#explorer[data-screen=suggestions] .media { overflow: hidden; }
+#explorer .home-dashboard { display: grid; grid-template-rows: minmax(0, .95fr) minmax(0, 1.15fr); gap: clamp(18px, 3vh, 38px); height: 100%; padding-bottom: clamp(0px, 2vh, 22px); }
+#explorer .touch-shelf { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+#explorer .shelf-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-shrink: 0; margin-bottom: clamp(10px, 1.7vh, 22px); }
+#explorer .shelf-heading h1, #explorer .shelf-heading h2 { margin: 0; font-size: clamp(25px, 2.15vw, 40px); font-weight: 600; line-height: 1.25; }
+#explorer .shelf-paging { display: flex; gap: 4px; }
+#explorer .shelf-paging[hidden] { display: none; }
+#explorer .shelf-paging button { width: 48px; height: 48px; padding: 10px; color: var(--cream); }
+#explorer .shelf-paging button svg { width: 26px; height: 26px; }
+#explorer [data-shelf-next] svg { transform: rotate(180deg); }
+#explorer .shelf-window { overflow: hidden; min-height: 0; flex: 1; }
+#explorer .shelf-items { --visible-items: 5; display: flex; align-items: flex-start; gap: var(--touch-gap); height: 100%; transition: transform .25s ease; }
+#explorer .playlist-shelf .shelf-items { --visible-items: 3; }
+#explorer [data-shelf-item] { flex: 0 0 calc((100% - (var(--visible-items) - 1) * var(--touch-gap)) / var(--visible-items)); min-width: 0; height: 100%; padding: 0; background: #72503233; border-radius: clamp(14px, 1.4vw, 24px); overflow: hidden; position: relative; text-align: left; color: #fff0d9; }
+#explorer [data-shelf-item]:hover { filter: brightness(1.12); }
+#explorer [data-shelf-item]:focus-visible { outline-offset: -4px; }
+#explorer .recent-tile { display: flex; flex-direction: column; background: transparent; }
+#explorer .recent-tile img { width: 100%; height: auto; aspect-ratio: 1; min-height: 0; flex: 0 1 auto; object-fit: cover; border-radius: inherit; }
+#explorer .recent-tile .name { display: block; width: 100%; font-size: clamp(16px, 1.35vw, 25px); line-height: 1.3; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 10px; }
+#explorer .playing-badge { position: absolute; right: 10px; top: 10px; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--cream); color: #21190f; }
+#explorer .playlist-tile { height: auto; max-height: 100%; aspect-ratio: 1.25; }
+#explorer .playlist-tile img { width: 100%; height: 100%; object-fit: cover; opacity: .85; }
+#explorer .playlist-tile:after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 15%, #1c1509df 100%); }
+#explorer .playlist-tile>span { position: absolute; z-index: 1; left: clamp(16px, 1.5vw, 28px); right: 16px; bottom: clamp(16px, 2.5vh, 32px); font-size: clamp(24px, 2.2vw, 42px); font-weight: 600; line-height: 1.16; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow-wrap: anywhere; }
+#explorer .shelf-notice { display: grid; align-content: center; height: 100%; padding: 24px; margin: 0; border: 1px solid var(--line); border-radius: 20px; color: var(--muted); }
+#explorer .shelf-notice a { color: var(--cream); text-decoration: underline; padding: 12px 0; }
+#explorer .jukebox-player { grid-area: miniplayer; display: grid; grid-template-rows: minmax(0, 1fr) auto auto auto auto; gap: clamp(10px, 1.8vh, 24px); min-height: 0; min-width: 0; background: transparent; }
+#explorer .player-artwork { display: flex; align-items: flex-start; min-height: 0; width: 100%; }
+#explorer .player-artwork img { display: block; height: 100%; width: 100%; max-width: 100%; object-fit: cover; border-radius: clamp(16px, 1.6vw, 28px); box-shadow: 0 12px 50px #0002; }
+#explorer .player-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-width: 0; }
+#explorer .player-meta { min-width: 0; }
+#explorer .player-meta h2 { font-size: clamp(28px, 2.7vw, 50px); line-height: 1.15; font-weight: 600; margin: 0 0 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#explorer .player-meta p { font-size: clamp(20px, 1.8vw, 34px); color: #e3c9a7; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#explorer .player-menu summary { display: grid; place-items: center; width: 48px; height: 48px; color: #e3c9a7; }
+#explorer .player-menu nav { top: auto; bottom: 52px; background: #35291d; width: max-content; max-width: 85vw; border-color: #ffe0b133; }
+#explorer .player-menu nav a, #explorer .player-menu nav button { display: block; text-align: left; padding: 14px 20px; min-height: 52px; background: transparent; color: #ffead0; font-size: 20px; font-weight: 400; }
+#explorer .jukebox-player .progress, #explorer .idle-progress { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 5px; margin: 0; width: 100%; }
+#explorer .jukebox-player progress { grid-column: 1 / 3; grid-row: 1; height: 44px; padding: 18px 0; width: 100%; margin: 0; background: transparent; border: 0; cursor: pointer; }
+#explorer .jukebox-player progress::-webkit-progress-bar { background: #6a5741; border-radius: 8px; }
+#explorer .jukebox-player progress::-webkit-progress-value { background: var(--cream); border: 0; border-radius: 8px; }
+#explorer .jukebox-player progress::-moz-progress-bar { background: var(--cream); border: 0; }
+#explorer .jukebox-player .duration, #explorer .jukebox-player .total_duration, #explorer .idle-progress { font-size: clamp(18px, 1.5vw, 28px); line-height: 1; }
+#explorer .jukebox-player .duration { grid-column: 1; grid-row: 2; }
+#explorer .jukebox-player .total_duration { grid-column: 2; grid-row: 2; justify-self: end; }
+#explorer .idle-progress>span:first-child { grid-column: 1/3; height: 8px; background: #6a5741; border-radius: 8px; margin: 18px 0; }
+#explorer .idle-progress>span:last-child { justify-self: end; }
+#explorer .touch-player-controls { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+#explorer .touch-player-controls button { color: var(--cream); width: clamp(52px, 4.6vw, 80px); height: clamp(52px, 4.6vw, 80px); padding: 12px; position: relative; }
+#explorer .touch-player-controls svg { width: clamp(28px, 2.4vw, 44px); height: clamp(28px, 2.4vw, 44px); fill: currentColor; }
+#explorer .touch-player-controls svg.icon { fill: none; }
+#explorer .touch-player-controls .touch-play { width: clamp(76px, 7vw, 126px); height: clamp(76px, 7vw, 126px); background: var(--cream); color: #21180d; }
+#explorer .touch-play svg { width: 48%; height: 48%; }
+#explorer .touch-player-controls .is-active { background: #ffe0b124; box-shadow: inset 0 0 0 2px #ffe0b166; }
+#explorer .repeat-one { position: absolute; font-size: 14px; }
+#explorer .player-tools { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 12px; padding-top: clamp(6px, 1.8vh, 24px); }
+#explorer .touch-volume, #explorer .touch-device { display: flex; gap: clamp(8px, 1vw, 18px); align-items: center; min-height: clamp(60px, 7vh, 92px); min-width: 0; padding: 8px clamp(12px, 1.3vw, 24px); border: 1px solid #f5cb9230; background: #f5cb9210; border-radius: clamp(16px, 1.6vw, 26px); color: var(--cream); }
+#explorer .player-tools .icon { width: clamp(24px, 1.7vw, 32px); height: clamp(24px, 1.7vw, 32px); }
+#explorer .touch-device { gap: 10px; padding: 8px 16px; font-size: clamp(17px, 1.4vw, 26px); font-weight: 400; }
+#explorer .touch-device span:first-of-type { min-width: 0; overflow: hidden; white-space: normal; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+#explorer .touch-device span:last-child { margin-left: auto; }
+#explorer .touch-volume input { width: 100%; min-width: 0; height: 44px; padding: 0; margin: 0; }
+#explorer input[type=range]::-webkit-slider-runnable-track { height: 6px; background: #6a5741; border: 0; box-shadow: none; }
+#explorer input[type=range]::-webkit-slider-thumb { height: 28px; width: 28px; margin-top: -11px; border: 0; border-radius: 50%; background: var(--cream); box-shadow: none; }
+#explorer input[type=range]::-moz-range-track { height: 6px; background: #6a5741; border: 0; }
+#explorer input[type=range]::-moz-range-thumb { height: 28px; width: 28px; border: 0; border-radius: 50%; background: var(--cream); }
+/* Secondary views stay inside the same viewport and keep the player visible. */
+#explorer .page-heading h1, #explorer .section-heading h2, #explorer .filter h1 { font-size: clamp(25px, 2vw, 38px); }
+#explorer .chips { gap: 10px; margin: 12px 0 20px; }
+#explorer .chip, #explorer .outline-button, #explorer .pagination .button, #explorer .button-group .button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 10px 18px; font-size: clamp(17px, 1.35vw, 24px); background: #f5cb9215; color: #ffead0; }
+#explorer .chip.active { background: var(--cream); color: #21180d; }
+#explorer .results { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+#explorer .result .name, #explorer .song-row { font-size: clamp(20px, 1.5vw, 28px); }
+#explorer .result .muted, #explorer .result .artist-name, #explorer .result .release-date, #explorer .song-row small, #explorer .song-duration { font-size: clamp(16px, 1.2vw, 22px); }
+#explorer .results .artwork .play-button { padding: 0; border: 0; border-radius: inherit; background: transparent; opacity: 1; }
+#explorer .card-play { width: 56px; height: 56px; opacity: 1; transform: none; }
+#explorer .song-row { min-height: 72px; padding: 12px; }
+#explorer .song-row img { width: 56px; height: 56px; }
+#explorer #navbar { height: auto; margin-bottom: 18px; }
+#explorer #navbar .search { max-width: none; }
+#explorer #navbar #q, #explorer #navbar #type { height: 60px; font-size: clamp(18px, 1.4vw, 26px); background-color: #f5cb9215; }
+#explorer #navbar #type { max-width: 150px; }
+#explorer #navbar .search button { display: inline-block; min-height: 60px; padding: 10px 20px; }
+#explorer .search-type-chips { display: none; }
+#explorer .browse-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#explorer .browse-card { height: clamp(100px, 17vh, 200px); font-size: clamp(22px, 2vw, 36px); }
+#explorer .alert { left: 38%; right: 5%; top: auto; bottom: 24px; font-size: 20px; padding: 18px 24px; max-height: 45%; overflow: auto; }
+#explorer .drawer { top: 20px; bottom: 20px; right: 20px; max-height: none; width: min(640px, calc(100% - 40px)); padding: 28px; background: #2d2319; border-color: #ffe0b144; }
+#explorer .drawer h2 { font-size: 32px; }
+#explorer .drawer .icon-button { min-width: 52px; min-height: 52px; }
+#explorer .device-row { min-height: 76px; font-size: 24px; }
+#explorer .device-row small, #explorer .panel-volume, #explorer .drawer .panel-label { font-size: 18px; }
+#explorer .panel-volume input { height: 48px; }
+#explorer .tracklist li { min-height: 60px; font-size: 22px; }
+#explorer .tracklist li .track-number, #explorer .tracklist li .duration { font-size: 18px; }
+#explorer .item .details .meta h1 { font-size: 36px; }
+#explorer .now-playing-layout { grid-template-columns: 1fr; min-height: 0; background: #ffe0b10a; }
+#explorer .now-playing-layout>img { display: none; }
+#explorer .now-playing-layout h1 { font-size: 36px; }
+#explorer .now-playing-layout .icon-button { min-width: 52px; min-height: 52px; }
+#explorer .availability-note, #explorer .device-status { font-size: 18px; }
+@media (max-width: 1200px) {
+  #explorer.jukebox-shell { gap: 20px 28px; padding: 22px 26px; grid-template-columns: minmax(0, 36fr) minmax(0, 64fr); }
+  #explorer .sidebar { padding: 6px; gap: 2px; }
+  #explorer .nav-item { font-size: 18px; gap: 8px; }
+  #explorer .nav-item svg { width: 26px; height: 26px; }
+  #explorer .recent-shelf .shelf-items { --visible-items: 4; }
+  #explorer .shelf-paging button { width: 44px; height: 44px; }
+  #explorer .player-tools { gap: 8px; }
+  #explorer .touch-device { gap: 8px; padding: 8px 12px; }
+  #explorer .player-tools .icon { width: 24px; height: 24px; }
+  #explorer .touch-volume { gap: 10px; padding: 8px 12px; }
+  #explorer #navbar .search form { flex-wrap: wrap; }
+  #explorer #navbar #q { flex: 1 1 100%; }
+  #explorer .search-columns { grid-template-columns: 1fr; }
+}
+@media (max-height: 700px) and (min-width: 701px) {
+  #explorer.jukebox-shell { padding-top: 16px; padding-bottom: 16px; row-gap: 16px; }
+  #explorer .nav-item { min-height: 54px; }
+  #explorer .jukebox-player { gap: 8px; }
+  #explorer .player-meta h2 { font-size: 28px; }
+  #explorer .player-meta p { font-size: 20px; }
+  #explorer .touch-play { max-width: 80px; max-height: 80px; }
+  #explorer .player-tools { padding-top: 4px; }
+  #explorer .touch-device, #explorer .touch-volume { min-height: 56px; }
+  #explorer .home-dashboard { gap: 16px; padding: 0; }
+  #explorer .shelf-heading { margin-bottom: 10px; }
+}
+@media (max-width: 700px) {
+  #explorer.jukebox-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto !important; grid-template-areas: 'header' 'media' 'miniplayer' !important; gap: 14px; padding: 12px; }
+  #explorer .nav-item { flex-direction: column; gap: 4px; font-size: 14px; min-height: 60px; }
+  #explorer .nav-item svg { width: 24px; height: 24px; }
+  #explorer .jukebox-player { grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 8px 12px; }
+  #explorer .player-artwork { grid-column: 1; grid-row: 1; height: 56px; }
+  #explorer .player-heading { grid-column: 2; grid-row: 1; align-self: center; }
+  #explorer .player-meta h2 { font-size: 20px; }
+  #explorer .player-meta p { font-size: 15px; }
+  #explorer .player-menu, #explorer .jukebox-player .progress, #explorer .idle-progress { display: none; }
+  #explorer .touch-player-controls { grid-column: 3; grid-row: 1; }
+  #explorer .touch-player-controls button { display: none; }
+  #explorer .touch-player-controls .touch-play { display: flex; width: 56px; height: 56px; }
+  #explorer .player-tools { grid-column: 1/4; grid-row: 2; padding: 0; }
+  #explorer .touch-volume, #explorer .touch-device { min-height: 48px; }
+  #explorer .home-dashboard { gap: 16px; padding: 0; }
+  #explorer .recent-shelf .shelf-items { --visible-items: 3; }
+  #explorer .playlist-shelf .shelf-items { --visible-items: 2; }
+  #explorer .shelf-heading h1, #explorer .shelf-heading h2 { font-size: 23px; }
+  #explorer .playlist-tile>span { font-size: 24px; left: 16px; bottom: 16px; }
+  #explorer .recent-tile .name { font-size: 16px; padding-top: 6px; }
+  #explorer .results, #explorer .browse-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #explorer .alert { left: 16px; right: 16px; font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { #explorer .shelf-items { transition: none; } }

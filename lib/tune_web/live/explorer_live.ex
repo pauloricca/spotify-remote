@@ -55,6 +55,8 @@ defmodule TuneWeb.ExplorerLive do
 
   @initial_state [
     panel: nil,
+    home_playlists: [],
+    home_playlists_error: nil,
     queue: %{currently_playing: nil, queue: []},
     queue_error: nil,
     library_kind: :playlists,
@@ -365,10 +367,6 @@ defmodule TuneWeb.ExplorerLive do
       [:progress_ms] == changes ->
         send_update(ProgressBarComponent, id: :progress_bar, progress_ms: player.progress_ms)
 
-        if socket.assigns.live_action == :now_playing do
-          send_update(ProgressBarComponent, id: :now_progress, progress_ms: player.progress_ms)
-        end
-
         {:noreply, assign(socket, :now_playing, player)}
 
       :item in changes ->
@@ -421,46 +419,24 @@ defmodule TuneWeb.ExplorerLive do
   defp handle_suggestions(_params, _url, socket) do
     session = socket.assigns.session_id
 
-    playlist =
-      case get_suggestions_playlist(session) do
-        {:ok, playlist} -> playlist
-        {:error, :not_present} -> :not_present
-        _ -> :not_fetched
-      end
-
     recent =
       case spotify_session().recently_played_tracks(session, limit: 50) do
         {:ok, tracks} -> Album.from_tracks(tracks)
         _ -> :not_fetched
       end
 
-    top = get_top_tracks(session, socket.assigns.suggestions_top_albums_time_range)
-
-    albums =
-      case top do
-        {:ok, tracks} -> Album.from_tracks(tracks)
-        _ -> :not_fetched
-      end
-
-    recommendations =
-      case top do
-        {:ok, tracks} ->
-          case get_recommendations(session, tracks) do
-            {:ok, recommended} -> recommended
-            _ -> :not_fetched
-          end
-
-        _ ->
-          :not_fetched
+    {playlists, playlists_error} =
+      case spotify_session().library(session, :playlists, offset: 0, after: nil) do
+        {:ok, page} -> {page.items, nil}
+        {:error, reason} -> {[], reason}
       end
 
     {:noreply,
      assign(socket,
        page_title: "Home",
-       suggestions_playlist: playlist,
        suggestions_recently_played_albums: recent,
-       suggestions_top_albums: albums,
-       suggestions_recommended_tracks: recommendations
+       home_playlists: playlists,
+       home_playlists_error: playlists_error
      )}
   end
 
@@ -741,25 +717,6 @@ defmodule TuneWeb.ExplorerLive do
   defp handle_spotify_session_result({:error, reason}, socket) do
     error_message = gettext("Spotify error: %{reason}", %{reason: inspect(reason)})
     {:noreply, put_flash(socket, :error, error_message)}
-  end
-
-  @suggestions_playlist_name "Release Radar"
-  defp get_suggestions_playlist(session_id) do
-    with {:ok, results} <-
-           spotify_session().search(session_id, @suggestions_playlist_name,
-             types: [:playlist],
-             limit: 1
-           ),
-         simplified_playlist when is_struct(simplified_playlist) <-
-           Enum.at(
-             get_in(results, [:playlist, :items]) || get_in(results, [:playlists, :items]) || [],
-             0
-           ) do
-      spotify_session().get_playlist(session_id, simplified_playlist.id)
-    else
-      nil -> {:error, :not_present}
-      error -> error
-    end
   end
 
   @top_tracks_limit 24

@@ -3,7 +3,7 @@ defmodule TuneWeb.RemoteView do
   use TuneWeb, :view
 
   alias Tune.Spotify.Schema.{Track, Episode, Playlist}
-  alias TuneWeb.{HeaderView, PlayerView, ProgressBarComponent, SearchView}
+  alias TuneWeb.{HeaderView, PlayerView, SearchView}
 
   def artwork(%Track{album: album}), do: artwork(album)
 

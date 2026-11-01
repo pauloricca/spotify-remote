@@ -17,6 +17,7 @@ defmodule TuneWeb.RemoteTest do
     |> stub(:now_playing, fn _ -> F.player() end)
     |> stub(:subscribe, fn _ -> :ok end)
     |> stub(:saved_items, fn _, uris -> {:ok, Enum.map(uris, fn _ -> true end)} end)
+    |> stub(:library, fn _, _, _ -> {:ok, %{items: [F.playlist()], total: 1, next: nil}} end)
     |> stub(:recently_played_tracks, fn _, _ -> {:ok, [F.track()]} end)
 
     {:ok,
@@ -65,20 +66,20 @@ defmodule TuneWeb.RemoteTest do
     refute has_element?(view, ".result")
   end
 
-  test "now playing uses live metadata, distinct progress bars and real playback controls", %{
+  test "now playing keeps one persistent player with live progress and playback controls", %{
     conn: conn
   } do
     {:ok, view, _} = live(conn, "/now-playing")
     assert has_element?(view, "h1", "Let It Happen")
-    assert has_element?(view, "#now_progress-bar[value='192000']")
+    assert has_element?(view, ".jukebox-player")
+    assert length(view |> render() |> Floki.parse_document!() |> Floki.find("progress")) == 1
     assert has_element?(view, "#progress_bar-bar[value='192000']")
     expect(Mock, :set_shuffle, fn "remote-user", true -> :ok end)
-    view |> element("button[phx-click=toggle_shuffle]") |> render_click()
+    view |> element("#mini-player button[phx-click=toggle_shuffle]") |> render_click()
     expect(Mock, :set_repeat, fn "remote-user", "context" -> :ok end)
-    view |> element("button[phx-click=toggle_repeat]") |> render_click()
+    view |> element("#mini-player button[phx-click=toggle_repeat]") |> render_click()
     send(view.pid, {:now_playing, %{F.player() | progress_ms: 193_000}})
     assert render(view) =~ "193000"
-    assert has_element?(view, "#now_progress-bar[value='193000']")
     assert has_element?(view, "#progress_bar-bar[value='193000']")
   end
 
@@ -139,14 +140,31 @@ defmodule TuneWeb.RemoteTest do
     view |> element("button[aria-label='Play playlist']") |> render_click()
   end
 
-  test "a missing Release Radar does not prevent recently played albums from loading", %{
+  test "home shows recent albums and actual saved playlists", %{
     conn: conn
   } do
     stub(Mock, :search, fn _, _, _ -> {:ok, %{playlist: %{items: [], total: 0}}} end)
     stub(Mock, :top_tracks, fn _, _ -> {:error, 403} end)
     {:ok, view, _} = live(conn, "/")
     assert has_element?(view, "#recently-played .name", "Currents")
-    refute render(view) =~ "Cannot display Release Radar"
+
+    assert has_element?(
+             view,
+             "#home-playlists button[phx-value-uri='spotify:playlist:playlist1']",
+             "Chilled Vibes"
+           )
+
+    expect(Mock, :play, fn "remote-user", "spotify:playlist:playlist1" -> :ok end)
+
+    view
+    |> element("#home-playlists button[phx-value-uri='spotify:playlist:playlist1']")
+    |> render_click()
+
+    expect(Mock, :play, fn "remote-user", "spotify:album:album1" -> :ok end)
+
+    view
+    |> element("#recently-played button[phx-value-uri='spotify:album:album1']")
+    |> render_click()
   end
 
   test "all search shows artists, songs and playlists using their real routes", %{conn: conn} do
@@ -168,6 +186,20 @@ defmodule TuneWeb.RemoteTest do
     assert has_element?(view, "a[href='/playlists/playlist1']")
   end
 
+  test "home keeps recent music available when playlist access is missing", %{conn: conn} do
+    stub(Mock, :library, fn _, :playlists, _ -> {:error, 403} end)
+    {:ok, view, _} = live(conn, "/")
+    assert has_element?(view, "#recently-played button[aria-label='Play Currents']")
+    assert has_element?(view, "#home-playlists a[href='/auth/spotify']", "Reconnect Spotify")
+  end
+
+  test "home keeps playlists available when recent history fails", %{conn: conn} do
+    stub(Mock, :recently_played_tracks, fn _, _ -> {:error, 403} end)
+    {:ok, view, _} = live(conn, "/")
+    assert has_element?(view, "#recently-played", "Recently played is unavailable")
+    assert has_element?(view, "#home-playlists button[aria-label='Play Chilled Vibes']")
+  end
+
   test "quota failure during mount renders the existing page and recovers", %{conn: conn} do
     stub(Mock, :get_profile, fn _ -> {:error, {:quota_exceeded, 3600}} end)
     stub(Mock, :get_player_token, fn _ -> {:error, :not_authenticated} end)
@@ -175,7 +207,7 @@ defmodule TuneWeb.RemoteTest do
     stub(Mock, :get_devices, fn _ -> {:error, :not_authenticated} end)
     {:ok, view, html} = live(conn, "/library")
     assert html =~ "quota is exhausted"
-    assert has_element?(view, ".sidebar")
+    assert has_element?(view, "nav[aria-label='Main navigation']")
 
     expect(Mock, :library, fn _, :playlists, _ ->
       {:ok, %{items: [F.playlist()], total: 1, next: nil}}
@@ -193,7 +225,7 @@ defmodule TuneWeb.RemoteTest do
   test "a playback authentication failure redirects instead of crashing", %{conn: conn} do
     {:ok, view, _} = live(conn, "/now-playing")
     expect(Mock, :next, fn _ -> {:error, :not_authenticated} end)
-    view |> element("button[phx-click=next]") |> render_click()
+    view |> element("#mini-player button[phx-click=next]") |> render_click()
     assert_redirect(view, "/auth/logout")
   end
 end

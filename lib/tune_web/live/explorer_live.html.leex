@@ -1,25 +1,19 @@
 <main role="main">
-  <section id="explorer" class="remote-shell">
-    <aside class="sidebar" aria-label="Main navigation">
-      <a class="brand" href="/"><%= render TuneWeb.HeaderView, "icon.html", name: :music %><span>tune</span></a>
-      <%= live_patch to: Routes.explorer_path(@socket, :suggestions), class: "nav-item #{if @live_action == :suggestions, do: "active"}" do %>
-        <%= render TuneWeb.HeaderView, "icon.html", name: :home %><span>Home</span>
-      <% end %>
-      <%= live_patch to: Routes.explorer_path(@socket, :search), class: "nav-item #{if @live_action == :search, do: "active"}" do %>
-        <%= render TuneWeb.HeaderView, "icon.html", name: :search %><span>Search</span>
-      <% end %>
-      <%= live_patch to: Routes.explorer_path(@socket, :library), class: "nav-item #{if @live_action == :library, do: "active"}" do %>
-        <%= render TuneWeb.HeaderView, "icon.html", name: :library %><span>Your Library</span>
-      <% end %>
-      <%= live_patch to: Routes.explorer_path(@socket, :now_playing), class: "nav-item now-nav #{if @live_action == :now_playing, do: "active"}" do %>
-        <%= render TuneWeb.HeaderView, "icon.html", name: :playing %><span>Now Playing</span>
-      <% end %>
-      <div class="sidebar-caption">Your music. Your space.<span>Spotify connected</span></div>
-    </aside>
-    <header>
-      <nav id="navbar">
-        <%= render TuneWeb.HeaderView, "search.html", socket: @socket, q: @q, type: @type %>
-        <%= render TuneWeb.HeaderView, "profile.html", socket: @socket, user: @user %>
+  <section id="explorer" class="remote-shell jukebox-shell" data-screen="<%= @live_action %>">
+    <header class="jukebox-header">
+      <nav class="sidebar" aria-label="Main navigation">
+        <%= live_patch to: Routes.explorer_path(@socket, :suggestions), class: "nav-item #{if @live_action == :suggestions, do: "active"}" do %>
+          <%= render TuneWeb.HeaderView, "icon.html", name: :home %><span>Home</span>
+        <% end %>
+        <%= live_patch to: Routes.explorer_path(@socket, :library, type: :tracks), class: "nav-item #{if @live_action == :library && @library_kind == :tracks, do: "active"}" do %>
+          <%= render TuneWeb.HeaderView, "icon.html", name: :heart %><span>Favourites</span>
+        <% end %>
+        <%= live_patch to: Routes.explorer_path(@socket, :library), class: "nav-item #{if @live_action == :library && @library_kind != :tracks, do: "active"}" do %>
+          <%= render TuneWeb.HeaderView, "icon.html", name: :library %><span>Library</span>
+        <% end %>
+        <%= live_patch to: Routes.explorer_path(@socket, :search), class: "nav-item #{if @live_action == :search, do: "active"}" do %>
+          <%= render TuneWeb.HeaderView, "icon.html", name: :search %><span>Search</span>
+        <% end %>
       </nav>
     </header>
     <a href="#" class="alert alert-info" role="alert"
@@ -41,6 +35,9 @@
     <% end %>
 
     <div class="media" id="music-content">
+      <%= if @live_action == :search do %>
+        <div id="navbar"><%= render TuneWeb.HeaderView, "search.html", socket: @socket, q: @q, type: @type %></div>
+      <% end %>
       <%= case @live_action do %>
         <% :library -> %>
           <%= render TuneWeb.RemoteView, "library.html", kind: @library_kind, page: @library_page, error: @library_error, socket: @socket %>
@@ -50,12 +47,9 @@
           <%= render TuneWeb.RemoteView, "playlist.html", playlist: @item, saved_items: @saved_items, socket: @socket %>
         <% :suggestions -> %>
           <%= render SuggestionsView, "index.html",
-            suggestions_playlist: @suggestions_playlist,
             suggestions_recently_played_albums: @suggestions_recently_played_albums,
-            suggestions_top_albums: @suggestions_top_albums,
-            suggestions_top_albums_time_range: @suggestions_top_albums_time_range,
-            suggestions_recommended_tracks: @suggestions_recommended_tracks,
-            suggestions_recommended_tracks_time_range: @suggestions_recommended_tracks_time_range,
+            home_playlists: @home_playlists,
+            home_playlists_error: @home_playlists_error,
             now_playing: @now_playing,
             socket: @socket %>
         <% :search -> %>

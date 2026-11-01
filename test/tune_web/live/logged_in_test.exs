@@ -13,6 +13,7 @@ defmodule TuneWeb.LoggedInTest do
 
   setup do
     Tune.Spotify.Session.Mock
+    |> stub(:library, fn _, _, _ -> {:ok, %{items: [], total: 0, next: nil}} end)
     |> stub(:saved_items, fn _, uris -> {:ok, Enum.map(uris, fn _ -> false end)} end)
     |> stub(:recently_played_tracks, fn _, _ -> {:ok, []} end)
     |> stub(:top_tracks, fn _, _ -> {:ok, []} end)
@@ -33,7 +34,7 @@ defmodule TuneWeb.LoggedInTest do
 
       expect_successful_authentication(session_id, credentials, profile)
       expect_nothing_playing(session_id)
-      expect_no_release_radar_playlist(session_id)
+      expect_home_recent(session_id)
 
       {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :suggestions))
 
@@ -52,7 +53,7 @@ defmodule TuneWeb.LoggedInTest do
         conn = init_test_session(conn, spotify_id: session_id, spotify_credentials: credentials)
         expect_successful_authentication(session_id, credentials, profile)
         expect_item_playing(session_id, item, device)
-        expect_no_release_radar_playlist(session_id)
+        expect_home_recent(session_id)
 
         {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :suggestions))
 
@@ -76,7 +77,7 @@ defmodule TuneWeb.LoggedInTest do
         conn = init_test_session(conn, spotify_id: session_id, spotify_credentials: credentials)
         expect_successful_authentication(session_id, credentials, profile)
         player = expect_item_playing(session_id, item, device)
-        expect_no_release_radar_playlist(session_id)
+        expect_home_recent(session_id)
 
         {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :suggestions))
 
@@ -110,7 +111,7 @@ defmodule TuneWeb.LoggedInTest do
         conn = init_test_session(conn, spotify_id: session_id, spotify_credentials: credentials)
         expect_successful_authentication(session_id, credentials, profile)
         player = expect_item_playing(session_id, item, device)
-        expect_no_release_radar_playlist(session_id)
+        expect_home_recent(session_id)
 
         {:ok, explorer_live, _html} = live(conn, Routes.explorer_path(conn, :suggestions))
 
@@ -143,12 +144,16 @@ defmodule TuneWeb.LoggedInTest do
                |> element("[data-test-control=prev]")
                |> render_click()
 
-        Tune.Spotify.Session.Mock
-        |> expect(:set_volume, 1, fn ^session_id, ^volume_percent -> :ok end)
+        if is_number(device.volume_percent) do
+          Tune.Spotify.Session.Mock
+          |> expect(:set_volume, 1, fn ^session_id, ^volume_percent -> :ok end)
 
-        assert explorer_live
-               |> element("[data-test-control=volume]")
-               |> render_hook("set_volume", %{"volume_percent" => volume_percent})
+          assert explorer_live
+                 |> element("[data-test-control=volume]")
+                 |> render_hook("set_volume", %{"volume_percent" => volume_percent})
+        else
+          assert has_element?(explorer_live, "[data-test-control=volume][disabled]")
+        end
 
         new_position_ms = max(player.progress_ms + 100, player.item.duration_ms - 100)
 
@@ -165,7 +170,7 @@ defmodule TuneWeb.LoggedInTest do
       end
     end
 
-    property "hides controls for users with a free subscription", %{conn: conn} do
+    property "disables controls for users with a free subscription", %{conn: conn} do
       check all(
               credentials <- Generators.credentials(),
               session_id <- Generators.session_id(),
@@ -177,7 +182,7 @@ defmodule TuneWeb.LoggedInTest do
 
         expect_successful_authentication(session_id, credentials, profile)
         expect_item_playing(session_id, item, device)
-        expect_no_release_radar_playlist(session_id)
+        expect_home_recent(session_id)
 
         {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :suggestions))
 
@@ -188,10 +193,10 @@ defmodule TuneWeb.LoggedInTest do
                |> element("[data-test-control=progress]")
                |> render() =~ ~s(phx-hook="ProgressBar")
 
-        refute has_element?(explorer_live, "[data-test-control=next]")
-        refute has_element?(explorer_live, "[data-test-control=prev]")
-        refute has_element?(explorer_live, "[data-test-control=play-pause]")
-        refute has_element?(explorer_live, "[data-test-control=volume]")
+        assert has_element?(explorer_live, "[data-test-control=next][disabled]")
+        assert has_element?(explorer_live, "[data-test-control=prev][disabled]")
+        assert has_element?(explorer_live, "[data-test-control=play-pause][disabled]")
+        assert has_element?(explorer_live, "[data-test-control=volume][disabled]")
       end
     end
   end
@@ -573,170 +578,21 @@ defmodule TuneWeb.LoggedInTest do
     end
   end
 
-  describe "suggestions" do
-    test "without release radar playlist", %{conn: conn} do
-      # Not necessary to run this as a property, as it doesn't have much
-      # expected variation - we just need some basic working data for the
-      # current session and user.
+  describe "home dashboard" do
+    test "renders two shelves and a persistent player", %{conn: conn} do
       session_id = pick(Generators.session_id())
       credentials = pick(Generators.credentials())
       profile = pick(Generators.profile())
       conn = init_test_session(conn, spotify_id: session_id, spotify_credentials: credentials)
-
       expect_successful_authentication(session_id, credentials, profile)
       expect_nothing_playing(session_id)
-      expect_no_release_radar_playlist(session_id)
+      expect_home_recent(session_id)
 
-      {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :suggestions))
-
-      assert html =~ "Recently Played"
-      refute html =~ "Cannot display Release Radar"
-
-      assert render(explorer_live) =~
-               "Recently Played"
-    end
-
-    property "with release radar playlist", %{conn: conn} do
-      top_tracks_limit = 24
-      time_range = "short_term"
-
-      check all(
-              credentials <- Generators.credentials(),
-              session_id <- Generators.session_id(),
-              profile <- Generators.profile(),
-              release_radar_playlist <- Generators.playlist("Release Radar"),
-              top_tracks <- uniq_list_of(Generators.track(), max_length: 24),
-              recently_played_tracks <- uniq_list_of(Generators.track(), max_length: 24),
-              recommended_tracks <- uniq_list_of(Generators.track(), max_length: 24)
-            ) do
-        conn = init_test_session(conn, spotify_id: session_id, spotify_credentials: credentials)
-
-        expect_successful_authentication(session_id, credentials, profile)
-        expect_nothing_playing(session_id)
-        expect_release_radar_playlist(session_id, release_radar_playlist)
-
-        expect_top_tracks(session_id, top_tracks, top_tracks_limit, time_range)
-        expect_recently_played_tracks(session_id, recently_played_tracks, 50)
-
-        artist_ids = Track.artist_ids(top_tracks)
-        expect_recommendations_from_artists(session_id, artist_ids, recommended_tracks)
-
-        {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :suggestions))
-
-        assert html =~ "Release Radar"
-        assert render(explorer_live) =~ "Release Radar"
-
-        for track <- release_radar_playlist.tracks do
-          escaped_album_name = escape(track.album.name)
-          assert html =~ escaped_album_name
-          assert render(explorer_live) =~ escaped_album_name
-
-          for artist <- track.artists do
-            escaped_artist_name = escape(artist.name)
-            assert html =~ escaped_artist_name
-            assert render(explorer_live) =~ escaped_artist_name
-          end
-        end
-      end
-    end
-
-    property "with top albums, recently played albums and recommended tracks", %{conn: conn} do
-      top_tracks_limit = 24
-      time_range = "short_term"
-
-      check all(
-              credentials <- Generators.credentials(),
-              session_id <- Generators.session_id(),
-              profile <- Generators.profile(),
-              release_radar_playlist <- Generators.playlist("Release Radar"),
-              top_tracks <- uniq_list_of(Generators.track(), max_length: 24),
-              recently_played_tracks <- uniq_list_of(Generators.track(), max_length: 24),
-              recommended_tracks <- uniq_list_of(Generators.track(), max_length: 24)
-            ) do
-        conn = init_test_session(conn, spotify_id: session_id, spotify_credentials: credentials)
-
-        expect_successful_authentication(session_id, credentials, profile)
-        expect_nothing_playing(session_id)
-        expect_release_radar_playlist(session_id, release_radar_playlist)
-
-        expect_top_tracks(session_id, top_tracks, top_tracks_limit, time_range)
-        expect_recently_played_tracks(session_id, recently_played_tracks, 50)
-
-        artist_ids = Track.artist_ids(top_tracks)
-        expect_recommendations_from_artists(session_id, artist_ids, recommended_tracks)
-
-        {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :suggestions))
-
-        assert html =~ "Top Albums"
-        assert html =~ "Recommended Tracks"
-        assert render(explorer_live) =~ "Top Albums"
-        assert render(explorer_live) =~ "Recommended Tracks"
-
-        for album <- Album.from_tracks(top_tracks) do
-          escaped_album_name = escape(album.name)
-          assert html =~ escaped_album_name
-          assert render(explorer_live) =~ escaped_album_name
-
-          for artist <- album.artists do
-            escaped_artist_name = escape(artist.name)
-            assert html =~ escaped_artist_name
-            assert render(explorer_live) =~ escaped_artist_name
-          end
-        end
-
-        for album <- Album.from_tracks(recently_played_tracks) do
-          escaped_album_name = escape(album.name)
-          assert html =~ escaped_album_name
-          assert render(explorer_live) =~ escaped_album_name
-
-          for artist <- album.artists do
-            escaped_artist_name = escape(artist.name)
-            assert html =~ escaped_artist_name
-            assert render(explorer_live) =~ escaped_artist_name
-          end
-        end
-
-        for track <- recommended_tracks do
-          escaped_track_name = escape(track.name)
-          assert html =~ escaped_track_name
-          assert render(explorer_live) =~ escaped_track_name
-
-          for artist <- track.artists do
-            escaped_artist_name = escape(artist.name)
-            assert html =~ escaped_artist_name
-            assert render(explorer_live) =~ escaped_artist_name
-          end
-        end
-      end
-    end
-
-    test "with an error fetching top tracks", %{conn: conn} do
-      # Not necessary to run this as a property, as it doesn't have much
-      # expected variation - we just need some basic working data for the
-      # current session and user.
-      session_id = pick(Generators.session_id())
-      credentials = pick(Generators.credentials())
-      profile = pick(Generators.profile())
-      release_radar_playlist = pick(Generators.playlist("Release Radar"))
-      conn = init_test_session(conn, spotify_id: session_id, spotify_credentials: credentials)
-
-      top_tracks_limit = 24
-      time_range = "short_term"
-
-      expect_successful_authentication(session_id, credentials, profile)
-      expect_nothing_playing(session_id)
-      expect_release_radar_playlist(session_id, release_radar_playlist)
-
-      Tune.Spotify.Session.Mock
-      |> expect(:top_tracks, 2, fn ^session_id,
-                                   [limit: ^top_tracks_limit, time_range: ^time_range] ->
-        {:error, 403}
-      end)
-
-      {:ok, explorer_live, html} = live(conn, Routes.explorer_path(conn, :suggestions))
-
-      assert html =~ "Cannot display top albums."
-      assert render(explorer_live) =~ "Cannot display top albums."
+      {:ok, view, _} = live(conn, Routes.explorer_path(conn, :suggestions))
+      assert has_element?(view, ".home-dashboard #recently-played")
+      assert has_element?(view, ".home-dashboard #home-playlists")
+      assert has_element?(view, "#mini-player #device-button")
+      assert has_element?(view, ".sidebar a[href='/library?type=tracks']", "Favourites")
     end
   end
 
@@ -774,55 +630,15 @@ defmodule TuneWeb.LoggedInTest do
     player
   end
 
-  defp expect_no_release_radar_playlist(session_id) do
+  defp expect_home_recent(session_id) do
     Tune.Spotify.Session.Mock
     |> expect(:recently_played_tracks, 2, fn ^session_id, [limit: 50] -> {:ok, []} end)
-    |> expect(:search, 2, fn ^session_id, "Release Radar", [types: [:playlist], limit: 1] ->
-      {:ok, %{playlists: %{items: [], total: 0}}}
-    end)
-  end
-
-  defp expect_release_radar_playlist(session_id, playlist) do
-    playlist_id = playlist.id
-
-    Tune.Spotify.Session.Mock
-    |> expect(:search, 2, fn ^session_id, "Release Radar", [types: [:playlist], limit: 1] ->
-      {:ok, %{playlists: %{items: [playlist], total: 1}}}
-    end)
-    |> expect(:get_playlist, 2, fn ^session_id, ^playlist_id ->
-      {:ok, playlist}
-    end)
-  end
-
-  defp expect_top_tracks(session_id, top_tracks, limit, time_range) do
-    Tune.Spotify.Session.Mock
-    |> expect(:top_tracks, 2, fn ^session_id, [limit: ^limit, time_range: ^time_range] ->
-      {:ok, top_tracks}
-    end)
-  end
-
-  defp expect_recently_played_tracks(session_id, recently_played_tracks, limit) do
-    Tune.Spotify.Session.Mock
-    |> expect(:recently_played_tracks, 2, fn ^session_id, [limit: ^limit] ->
-      {:ok, recently_played_tracks}
-    end)
   end
 
   defp expect_single_recently_played_tracks(session_id, recently_played_tracks, limit) do
     Tune.Spotify.Session.Mock
     |> expect(:recently_played_tracks, 1, fn ^session_id, [limit: ^limit] ->
       {:ok, recently_played_tracks}
-    end)
-  end
-
-  defp expect_recommendations_from_artists(session_id, artist_ids, recommended_tracks) do
-    Tune.Spotify.Session.Mock
-    |> expect(:get_recommendations_from_artists, 2, fn ^session_id, requested_artist_ids ->
-      for requested_artist_id <- requested_artist_ids do
-        assert requested_artist_id in artist_ids
-      end
-
-      {:ok, recommended_tracks}
     end)
   end
 end

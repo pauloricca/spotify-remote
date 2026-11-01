@@ -1,53 +1,37 @@
-<div class="page-heading"><h1>Good morning</h1></div>
-<div class="mix-grid" aria-label="Find your next listen">
-  <%= for {title, query, color} <- [{"Discover Weekly", "discover weekly", "discover"}, {"Daily Mix 1", "daily mix", "daily"}, {"Chilled Vibes", "chill", "chill"}, {"Indie Favourites", "indie", "indie"}] do %>
-    <%= live_patch to: Routes.explorer_path(@socket, :search, q: query, type: "playlist"), class: "mix-card mix-#{color}" do %>
-      <% albums = if is_list(@suggestions_recently_played_albums), do: @suggestions_recently_played_albums, else: [] %>
-      <% index = Enum.find_index(["discover", "daily", "chill", "indie"], &(&1 == color)) %>
-      <%= if album = Enum.at(albums, index) do %><%= img_tag TuneWeb.RemoteView.artwork(album), alt: "", class: "mix-art" %><% end %>
-      <span><%= title %></span>
+<div class="home-dashboard">
+  <section class="touch-shelf recent-shelf" id="recently-played" phx-hook="TouchShelf" aria-labelledby="recent-heading">
+    <div class="shelf-heading"><h1 id="recent-heading">Recently Played</h1>
+      <div class="shelf-paging"><button class="icon-button" type="button" data-shelf-prev aria-label="Previous recently played albums"><%= render TuneWeb.HeaderView, "icon.html", name: :back %></button><button class="icon-button" type="button" data-shelf-next aria-label="More recently played albums"><%= render TuneWeb.HeaderView, "icon.html", name: :back %></button></div>
+    </div>
+    <%= case @suggestions_recently_played_albums do %>
+      <% :not_fetched -> %><p class="shelf-notice">Recently played is unavailable. <%= live_patch "Try again", to: Routes.explorer_path(@socket, :suggestions) %></p>
+      <% [] -> %><p class="shelf-notice">Play something you love. Your recent albums will appear here.</p>
+      <% albums -> %>
+        <div class="shelf-window"><div class="shelf-items">
+          <%= for album <- albums do %>
+            <button class="recent-tile" data-shelf-item phx-click="play" phx-value-uri="<%= album.uri %>" aria-label="Play <%= album.name %>" title="<%= album.name %>">
+              <%= img_tag TuneWeb.RemoteView.artwork(album), alt: album.name, draggable: "false" %><span class="name"><%= album.name %></span>
+              <%= if @now_playing.item && TuneWeb.RemoteView.context(@now_playing.item) && TuneWeb.RemoteView.context(@now_playing.item).uri == album.uri do %><span class="playing-badge"><%= render TuneWeb.HeaderView, "icon.html", name: :playing %></span><% end %>
+            </button>
+          <% end %>
+        </div></div>
     <% end %>
-  <% end %>
+  </section>
+  <section class="touch-shelf playlist-shelf" id="home-playlists" phx-hook="TouchShelf" aria-labelledby="playlists-heading">
+    <div class="shelf-heading"><h2 id="playlists-heading">Your Playlists</h2>
+      <div class="shelf-paging"><button class="icon-button" type="button" data-shelf-prev aria-label="Previous playlists"><%= render TuneWeb.HeaderView, "icon.html", name: :back %></button><button class="icon-button" type="button" data-shelf-next aria-label="More playlists"><%= render TuneWeb.HeaderView, "icon.html", name: :back %></button></div>
+    </div>
+    <%= cond do %>
+      <% @home_playlists_error -> %><p class="shelf-notice"><%= TuneWeb.RemoteView.error_message(@home_playlists_error) %> <%= if @home_playlists_error == 403 do %><a href="/auth/spotify">Reconnect Spotify</a><% else %><%= live_patch "Try again", to: Routes.explorer_path(@socket, :suggestions) %><% end %></p>
+      <% @home_playlists == [] -> %><p class="shelf-notice">Your saved playlists will appear here. <%= live_patch "Find a playlist", to: Routes.explorer_path(@socket, :search, type: :playlist) %></p>
+      <% true -> %>
+        <div class="shelf-window"><div class="shelf-items">
+          <%= for playlist <- @home_playlists do %>
+            <button class="playlist-tile" data-shelf-item phx-click="play" phx-value-uri="<%= playlist.uri %>" aria-label="Play <%= playlist.name %>">
+              <%= img_tag TuneWeb.RemoteView.artwork(playlist), alt: "", draggable: "false" %><span><%= playlist.name %></span>
+            </button>
+          <% end %>
+        </div></div>
+    <% end %>
+  </section>
 </div>
-<%= case @suggestions_recently_played_albums do %>
-  <% :not_fetched -> %>
-    <%= content_tag :p, gettext("Cannot display recently played albums.") %>
-  <% albums -> %>
-    <%= render "recently_played_albums.html",
-      albums: albums,
-      now_playing: @now_playing,
-      socket: @socket %>
-  <% end %>
-
-<%= case @suggestions_top_albums do %>
-  <% :not_fetched -> %>
-    <p class="muted availability-note">Cannot display top albums.</p>
-  <% albums -> %>
-    <%= render "top_albums.html",
-      albums: albums,
-      suggestions_top_albums_time_range: @suggestions_top_albums_time_range,
-      now_playing: @now_playing,
-      socket: @socket %>
-  <% end %>
-
-<%= case @suggestions_recommended_tracks do %>
-  <% :not_fetched -> %>
-
-  <% tracks -> %>
-    <%= render "recommended_tracks.html",
-      tracks: tracks,
-      suggestions_recommended_tracks_time_range: @suggestions_recommended_tracks_time_range,
-      now_playing: @now_playing,
-      socket: @socket %>
-  <% end %>
-
-<%= case @suggestions_playlist do %>
-  <% :not_fetched -> %>
-
-  <% :not_present -> %>
-
-  <% playlist -> %>
-    <%= if is_list(playlist.tracks) do %><%= render PlaylistView, "show.html", playlist: playlist, now_playing: @now_playing, socket: @socket %><% else %>
-      <div class="section-heading"><h2>Made for you</h2></div><div class="results"><%= render TuneWeb.RemoteView, "card.html", item: playlist, socket: @socket %></div>
-    <% end %>
-  <% end %>

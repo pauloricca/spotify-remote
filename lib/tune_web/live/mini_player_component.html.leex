@@ -1,19 +1,42 @@
-<div id="mini-player" class="mini-player" phx-hook="GlobalShortcuts">
-  <button class="device icon-button" id="device-button" phx-click="open_devices" aria-label="Choose playback device" title="Choose playback device">
-    <%= render TuneWeb.HeaderView, "icon.html", name: :device %>
-  </button>
-  <button class="queue-button icon-button" phx-click="open_queue" aria-label="Open queue" title="Open queue"><%= render TuneWeb.HeaderView, "icon.html", name: :queue %></button>
-  <%= case @now_playing do %>
-    <% %{status: :not_playing} -> %>
-      <%= content_tag :p, gettext("Not playing") %>
-    <% %{status: status, item: item, progress_ms: progress_ms, device: device} -> %>
-      <%= live_patch to: Routes.explorer_path(@socket, :now_playing) do %>
-        <%= img_tag thumbnail(item), alt: name(item) %>
-      <% end %>
-      <%= render PlayerView, "meta.html", item: item, socket: @socket %>
-      <%= live_component ProgressBarComponent, id: :progress_bar, premium?: @premium?, progress_ms: progress_ms, total_duration_ms: item.duration_ms %>
-      <%= if @premium? do %>
-        <%= render PlayerView, "controls.html", status: status, device: device %>
-      <% end %>
+<aside id="mini-player" class="jukebox-player" phx-hook="GlobalShortcuts" aria-label="Now playing">
+  <% item = @now_playing.item %>
+  <%= live_patch to: Routes.explorer_path(@socket, :now_playing), class: "player-artwork", aria_label: "Now playing details" do %>
+    <%= img_tag TuneWeb.RemoteView.artwork(item), alt: (if item, do: item.name, else: "Choose your soundtrack"), draggable: "false" %>
   <% end %>
-</div>
+  <div class="player-heading">
+    <div class="player-meta">
+      <h2><%= if item, do: item.name, else: "Your kitchen soundtrack" %></h2>
+      <p><%= if item, do: TuneWeb.RemoteView.byline(item), else: "Not playing · Pick something you love" %></p>
+    </div>
+    <details class="profile-menu player-menu">
+      <summary aria-label="More and account settings"><%= render TuneWeb.HeaderView, "icon.html", name: :settings %></summary>
+      <nav aria-label="Account and playback">
+        <button phx-click="open_queue">Open queue</button>
+        <a href="/auth/spotify">Reconnect Spotify</a>
+        <%= link "Log out", to: Routes.auth_path(@socket, :delete), method: :post %>
+      </nav>
+    </details>
+  </div>
+  <%= if item do %>
+    <%= live_component ProgressBarComponent, id: :progress_bar, premium?: @premium?, progress_ms: @now_playing.progress_ms, total_duration_ms: item.duration_ms %>
+  <% else %>
+    <div class="idle-progress" aria-hidden="true"><span></span><span>0:00</span><span>0:00</span></div>
+  <% end %>
+  <div class="touch-player-controls" aria-label="Playback controls">
+    <button class="icon-button <%= if @now_playing.shuffle_state, do: "is-active" %>" phx-click="toggle_shuffle" aria-label="Shuffle" aria-pressed="<%= @now_playing.shuffle_state %>" <%= if !@premium? || is_nil(item), do: "disabled" %>><%= render TuneWeb.HeaderView, "icon.html", name: :shuffle %></button>
+    <button class="icon-button" phx-click="prev" data-test-control="prev" aria-label="Previous track" <%= if !@premium? || is_nil(item), do: "disabled" %>><%= render PlayerView, "icon_prev.html", [] %></button>
+    <button class="icon-button touch-play" phx-click="toggle_play_pause" data-test-control="play-pause" data-test-status="<%= @now_playing.status %>" aria-label="<%= if @now_playing.status == :playing, do: "Pause", else: "Play" %>" <%= if !@premium? || is_nil(item), do: "disabled" %>><%= render PlayerView, if(@now_playing.status == :playing, do: "icon_pause.html", else: "icon_play.html"), [] %></button>
+    <button class="icon-button" phx-click="next" data-test-control="next" aria-label="Next track" <%= if !@premium? || is_nil(item), do: "disabled" %>><%= render PlayerView, "icon_next.html", [] %></button>
+    <button class="icon-button <%= if @now_playing.repeat_state != "off", do: "is-active" %>" phx-click="toggle_repeat" aria-label="Repeat: <%= @now_playing.repeat_state %>" aria-pressed="<%= @now_playing.repeat_state != "off" %>" <%= if !@premium? || is_nil(item), do: "disabled" %>><%= render TuneWeb.HeaderView, "icon.html", name: :repeat %><%= if @now_playing.repeat_state == "track" do %><span class="repeat-one">1</span><% end %></button>
+  </div>
+  <div class="player-tools">
+    <div class="touch-volume">
+      <%= render TuneWeb.HeaderView, "icon.html", name: :volume %>
+      <label for="volume" class="visually-hidden">Set volume</label>
+      <input type="range" id="volume" data-test-control="volume" min="0" max="100" step="1" value="<%= if @now_playing.device, do: @now_playing.device.volume_percent || 0, else: 0 %>" phx-hook="VolumeSlider" <%= if !@premium? || is_nil(@now_playing.device) || is_nil(@now_playing.device.volume_percent), do: "disabled" %> />
+    </div>
+    <button class="touch-device" id="device-button" phx-click="open_devices" aria-label="Choose playback device">
+      <%= render TuneWeb.HeaderView, "icon.html", name: :device %><span><%= if @now_playing.device, do: @now_playing.device.name, else: "Choose device" %></span><span aria-hidden="true">⌄</span>
+    </button>
+  </div>
+</aside>

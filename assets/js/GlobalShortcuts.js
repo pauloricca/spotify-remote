@@ -19,13 +19,19 @@ export default {
         case "d": this.pushEvent("next", {}); break;
         case "w": this.pushEvent("inc_volume", {}); break;
         case "s": this.pushEvent("dec_volume", {}); break;
-        case "h": document.querySelector(".sidebar .brand").click(); break;
+        case "h": document.querySelector('.sidebar a[href="/"]').click(); break;
         case "?": this.toggleHelp(); break;
         case "Escape":
           document.querySelector("#help").classList.add("closed");
           document.querySelector("#modal-overlay").classList.add("closed");
           break;
-        case "/": event.preventDefault(); document.querySelector("#q").focus(); break;
+        case "/": {
+          event.preventDefault();
+          const input = document.querySelector("#q");
+          if (input) input.focus();
+          else document.querySelector('.sidebar a[href="/search"]').click();
+          break;
+        }
         case "q": this.pushEvent("open_devices", {}); break;
         case "n": {
           const link = document.querySelector("#next-page");

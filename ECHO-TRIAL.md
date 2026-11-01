@@ -6,6 +6,23 @@ The intended setup is Silk showing Tune's controls and Spotify Connect
 playing on the Echo's native Spotify integration or another available device.
 Silk audio playback via Spotify's Web Playback SDK is unverified.
 
+## Touch dashboard
+
+Echo Show 11 has a 1920 × 1200 physical display. Silk's CSS viewport can be
+smaller because of display scaling and its address bar. The dashboard uses
+the visible browser height (`visualViewport.height`, falling back to
+`innerHeight`) rather than assuming the entire display is available.
+
+Home has a persistent player, five recent albums (four on narrower displays),
+and three saved playlists. Large arrow buttons page through each shelf without
+scrolling. Home, Favourites, Library, and Search share the same player. Long
+library and search results stay inside the content pane; the document itself
+does not scroll.
+
+Browser QA with fixture data covers 1920 × 1050, 1280 × 680, approximately
+1024 × 600, and 390 × 844 CSS viewports. These checks do not replace testing
+on the physical Echo with Silk and live Spotify playback.
+
 ## Spotify setup
 
 1. Sign into https://developer.spotify.com/dashboard with your Premium account.
