@@ -132,7 +132,7 @@ defmodule TuneWeb.ExplorerLive do
     |> assign_new(:device_name, &generate_device_name/0)
     |> assign(
       session_id: session_id,
-      preferred_device: (get_connect_params(socket) || %{})["preferred_device"],
+      preferred_device: preferred_device(socket),
       user: user,
       premium?: ready? and User.premium?(user),
       now_playing: player,
@@ -762,6 +762,8 @@ defmodule TuneWeb.ExplorerLive do
   defp parse_album_group("compilation"), do: :compilation
 
   # Keep the preference on this LiveView/browser, not the shared Spotify session.
+  defp preferred_device(socket), do: (get_connect_params(socket) || %{})["preferred_device"]
+
   defp play_with_preferred_device(socket, play) do
     result = play.()
 
