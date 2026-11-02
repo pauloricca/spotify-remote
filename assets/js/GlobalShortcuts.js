@@ -1,5 +1,8 @@
+import { rememberDevice } from "./PreferredDevice";
+
 export default {
   mounted() {
+    this.handleEvent("remember_device", ({ device }) => rememberDevice(device));
     this.toggleHelp = () => {
       document.querySelector("#help").classList.toggle("closed");
       document.querySelector("#modal-overlay").classList.toggle("closed");

@@ -20,9 +20,14 @@
       phx-click="lv:clear-flash"
       phx-value-key="info"><%= live_flash(@flash, :info) %></a>
 
-    <a href="#" class="alert alert-danger" role="alert"
-      phx-click="lv:clear-flash"
-      phx-value-key="error"><%= live_flash(@flash, :error) %></a>
+    <%= if message = live_flash(@flash, :error) do %>
+      <div id="error-flash" class="alert alert-danger dismissible-alert" role="alert"
+        phx-hook="DismissibleAlert" data-message="<%= message %>">
+        <span><%= message %></span>
+        <button type="button" class="alert-close" aria-label="Dismiss error"
+          phx-click="lv:clear-flash" phx-value-key="error"><span aria-hidden="true">×</span></button>
+      </div>
+    <% end %>
 
     <a href="#" class="alert alert-warning" role="alert"
       phx-click="lv:clear-flash"

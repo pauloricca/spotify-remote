@@ -21,6 +21,8 @@ import VolumeSlider from "./VolumeSlider";
 import ProgressBar from "./ProgressBar";
 import AudioPlayer from "./AudioPlayer";
 import GlobalShortcuts from "./GlobalShortcuts";
+import DismissibleAlert from "./DismissibleAlert";
+import { preferredDevice } from "./PreferredDevice";
 import StopKeyDownPropagation from "./StopKeyDownPropagation";
 import { visibleViewportHeight } from "./Viewport";
 
@@ -46,13 +48,14 @@ let csrfToken = document
   .getAttribute("content");
 
 let liveSocket = new LiveSocket("/live", Socket, {
-  params: { _csrf_token: csrfToken },
+  params: () => ({ _csrf_token: csrfToken, preferred_device: preferredDevice() }),
   hooks: {
     PlaybackPanel,
     ProgressBar,
     VolumeSlider,
     AudioPlayer,
     GlobalShortcuts,
+    DismissibleAlert,
     StopKeyDownPropagation,
   },
 });

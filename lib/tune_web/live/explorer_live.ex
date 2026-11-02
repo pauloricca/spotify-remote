@@ -132,6 +132,7 @@ defmodule TuneWeb.ExplorerLive do
     |> assign_new(:device_name, &generate_device_name/0)
     |> assign(
       session_id: session_id,
+      preferred_device: (get_connect_params(socket) || %{})["preferred_device"],
       user: user,
       premium?: ready? and User.premium?(user),
       now_playing: player,
@@ -292,21 +293,21 @@ defmodule TuneWeb.ExplorerLive do
   end
 
   def handle_event("toggle_play_pause", _params, socket) do
-    socket.assigns.session_id
-    |> spotify_session().toggle_play()
-    |> handle_spotify_session_result(socket)
+    play_with_preferred_device(socket, fn ->
+      spotify_session().toggle_play(socket.assigns.session_id)
+    end)
   end
 
   def handle_event("play", %{"uri" => uri, "context-uri" => context_uri}, socket) do
-    socket.assigns.session_id
-    |> spotify_session().play(uri, context_uri)
-    |> handle_spotify_session_result(socket)
+    play_with_preferred_device(socket, fn ->
+      spotify_session().play(socket.assigns.session_id, uri, context_uri)
+    end)
   end
 
   def handle_event("play", %{"uri" => uri}, socket) do
-    socket.assigns.session_id
-    |> spotify_session().play(uri)
-    |> handle_spotify_session_result(socket)
+    play_with_preferred_device(socket, fn ->
+      spotify_session().play(socket.assigns.session_id, uri)
+    end)
   end
 
   def handle_event("next", _params, socket) do
@@ -365,7 +366,10 @@ defmodule TuneWeb.ExplorerLive do
   def handle_event("transfer_playback", %{"device" => device_id}, socket) do
     case spotify_session().transfer_playback(socket.assigns.session_id, device_id) do
       :ok ->
-        {:noreply, socket}
+        {:noreply,
+         socket
+         |> assign(:preferred_device, device_id)
+         |> push_event("remember_device", %{device: device_id})}
 
       error ->
         handle_spotify_session_result(error, socket)
@@ -756,6 +760,39 @@ defmodule TuneWeb.ExplorerLive do
   defp parse_album_group("single"), do: :single
   defp parse_album_group("appears_on"), do: :appears_on
   defp parse_album_group("compilation"), do: :compilation
+
+  # Keep the preference on this LiveView/browser, not the shared Spotify session.
+  defp play_with_preferred_device(socket, play) do
+    result = play.()
+
+    result =
+      if result == {:error, 404} do
+        session_id = socket.assigns.session_id
+
+        with :ok <- spotify_session().refresh_devices(session_id),
+             devices when is_list(devices) <- spotify_session().get_devices(session_id) do
+          device =
+            Enum.find(devices, fn device ->
+              device.id not in [nil, ""] and not device.is_restricted and
+                (is_nil(socket.assigns.preferred_device) or
+                   device.id == socket.assigns.preferred_device)
+            end)
+
+          if device do
+            case spotify_session().transfer_playback(session_id, device.id) do
+              :ok -> play.()
+              error -> error
+            end
+          else
+            {:error, 404}
+          end
+        end
+      else
+        result
+      end
+
+    handle_spotify_session_result(result, socket)
+  end
 
   defp handle_spotify_session_result(:ok, socket), do: {:noreply, socket}
 

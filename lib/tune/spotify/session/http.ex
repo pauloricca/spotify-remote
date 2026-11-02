@@ -275,7 +275,7 @@ defmodule Tune.Spotify.Session.HTTP do
     case data.now_playing.status do
       :playing -> command(:pause, [], data)
       :paused -> command(:play, [], data)
-      _ -> {:reply, :ok, data}
+      _ -> command(:play, [], data)
     end
   end
 

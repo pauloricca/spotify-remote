@@ -46,6 +46,85 @@ defmodule TuneWeb.RemoteTest do
     assert_received {:library_request, :playlists, [offset: 0, after: nil]}
   end
 
+  test "playback errors expose an automatic timeout and a working close button", %{conn: conn} do
+    expect(Mock, :next, fn _ -> {:error, 404} end)
+    {:ok, view, _} = live(conn, "/now-playing")
+    render_click(view, "next")
+    assert has_element?(view, "#error-flash[phx-hook=DismissibleAlert]", "No available devices")
+
+    view |> element("#error-flash button[aria-label='Dismiss error']") |> render_click()
+    refute has_element?(view, "#error-flash")
+  end
+
+  for playback <- [:item, :context, :resume] do
+    test "#{playback} playback restores this browser's saved device", %{conn: conn} do
+      playback = unquote(playback)
+      conn = put_connect_params(conn, %{"preferred_device" => "saved-speaker"})
+      {:ok, view, _} = live(conn, "/now-playing")
+      saved = %{F.device() | id: "saved-speaker"}
+      expect(Mock, :refresh_devices, fn "remote-user" -> :ok end)
+      expect(Mock, :get_devices, fn "remote-user" -> [F.device(), saved] end)
+      expect(Mock, :transfer_playback, fn "remote-user", "saved-speaker" -> :ok end)
+
+      params = expect_playback_retry(playback)
+      event = if playback == :resume, do: "toggle_play_pause", else: "play"
+      render_click(view, event, params)
+      refute has_element?(view, "#error-flash")
+    end
+  end
+
+  test "an unavailable remembered device does not switch to a different speaker", %{conn: conn} do
+    conn = put_connect_params(conn, %{"preferred_device" => "offline-speaker"})
+    {:ok, view, _} = live(conn, "/now-playing")
+    expect(Mock, :play, fn _, "spotify:track:track1" -> {:error, 404} end)
+    expect(Mock, :refresh_devices, fn _ -> :ok end)
+    expect(Mock, :get_devices, fn _ -> [F.device()] end)
+    render_click(view, "play", %{"uri" => F.track().uri})
+    assert has_element?(view, "#error-flash", "No available devices")
+  end
+
+  test "a chosen device is remembered immediately and sent to browser storage", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/now-playing")
+    expect(Mock, :transfer_playback, fn _, "chosen-speaker" -> :ok end)
+    render_click(view, "transfer_playback", %{"device" => "chosen-speaker"})
+    assert_push_event(view, "remember_device", %{device: "chosen-speaker"})
+
+    expect(Mock, :refresh_devices, fn _ -> :ok end)
+    expect(Mock, :get_devices, fn _ -> [F.device(), %{F.device() | id: "chosen-speaker"}] end)
+    expect(Mock, :transfer_playback, fn _, "chosen-speaker" -> :ok end)
+    params = expect_playback_retry(:item)
+    render_click(view, "play", params)
+    refute has_element?(view, "#error-flash")
+  end
+
+  test "a fresh browser still selects an available device", %{conn: conn} do
+    {:ok, view, _} = live(conn, "/now-playing")
+    expect(Mock, :refresh_devices, fn _ -> :ok end)
+    expect(Mock, :get_devices, fn _ -> [F.device()] end)
+    expect(Mock, :transfer_playback, fn _, "echo1" -> :ok end)
+    params = expect_playback_retry(:item)
+    render_click(view, "play", params)
+    refute has_element?(view, "#error-flash")
+  end
+
+  defp expect_playback_retry(:resume) do
+    expect(Mock, :toggle_play, fn _ -> {:error, 404} end)
+    expect(Mock, :toggle_play, fn _ -> :ok end)
+    %{}
+  end
+
+  defp expect_playback_retry(:item) do
+    expect(Mock, :play, fn _, "spotify:track:track1" -> {:error, 404} end)
+    expect(Mock, :play, fn _, "spotify:track:track1" -> :ok end)
+    %{"uri" => F.track().uri}
+  end
+
+  defp expect_playback_retry(:context) do
+    expect(Mock, :play, fn _, "spotify:track:track1", "spotify:album:album1" -> {:error, 404} end)
+    expect(Mock, :play, fn _, "spotify:track:track1", "spotify:album:album1" -> :ok end)
+    %{"uri" => F.track().uri, "context-uri" => F.album().uri}
+  end
+
   test "library filters and cursor paging request the matching content", %{conn: conn} do
     parent = self()
 

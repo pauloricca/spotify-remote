@@ -146,6 +146,9 @@ button svg.icon, .button svg.icon { fill: none; stroke: currentColor; }
 #explorer .browse-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #explorer .browse-card { height: clamp(100px, 17vh, 200px); font-size: clamp(22px, 2vw, 36px); }
 #explorer .alert { left: 38%; right: 5%; top: auto; bottom: 24px; font-size: 20px; padding: 18px 24px; max-height: 45%; overflow: auto; }
+#explorer .dismissible-alert { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+#explorer .alert-close { flex-shrink: 0; color: inherit; background: transparent; border: 0; font-size: 28px; line-height: 1; height: 44px; min-width: 44px; padding: 0; margin: 0; cursor: pointer; }
+#explorer .alert-close:hover, #explorer .alert-close:focus { color: inherit; background: transparent; }
 #explorer .drawer { top: 20px; bottom: 20px; right: 20px; max-height: none; width: min(640px, calc(100% - 40px)); padding: 28px; background: #2d2319; border-color: #ffe0b144; }
 #explorer .drawer h2 { font-size: 32px; }
 #explorer .drawer .icon-button { min-width: 52px; min-height: 52px; }
